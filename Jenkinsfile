@@ -1,8 +1,11 @@
 pipeline {
     agent any
+
+    // Trigger pipeline automatically on Git Push
     triggers {
         githubPush()
     }
+
     environment {
         DEPLOY_HOST = '172.31.77.148'
         DEPLOY_USER = 'ubuntu'
@@ -16,15 +19,25 @@ pipeline {
                 sshagent(['deploy-server-key']) {
                     sh '''
                         ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
+                            echo '--- 1. Cleaning Staging Area ---'
                             rm -rf ${BUILD_DIR}
                             mkdir -p ${BUILD_DIR}
+                            
+                            echo '--- 2. Cloning Repository ---'
                             git clone https://github.com/Jawadaziz78/django-project.git ${BUILD_DIR}
                             cd ${BUILD_DIR}
+                            
+                            echo '--- 3. Installing Backend Dependencies ---'
                             composer install --no-interaction --prefer-dist --optimize-autoloader
+                            
+                            echo '--- 4. Setting Environment ---'
                             cp .env.example .env
                             php artisan key:generate --force
+                            
+                            echo '--- 5. Building Frontend ---'
                             npm install
                             npm run build
+                            
                             echo '✅ BUILD STAGE SUCCESS'
                         "
                     '''
@@ -38,9 +51,15 @@ pipeline {
                     sh '''
                         ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
                             cd ${BUILD_DIR}
+                            
+                            echo '--- Running Unit Tests ---'
+                            
+                            # Attempting to switch to SQLite using standard Environment Variables
                             export DB_CONNECTION=sqlite
                             export DB_DATABASE=:memory:
+                            
                             php artisan test tests/Unit
+                            
                             echo '✅ TEST STAGE SUCCESS'
                         "
                     '''
@@ -53,6 +72,10 @@ pipeline {
                 sshagent(['deploy-server-key']) {
                     sh '''
                         ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
+                            echo '--- Starting Safe Deployment ---'
+                            
+                            # 1. Sync files to Live Directory
+                            # --exclude ensures we DO NOT delete your .env or storage folders
                             rsync -av --delete \\
                                 --exclude='.env' \\
                                 --exclude='.git' \\
@@ -60,12 +83,15 @@ pipeline {
                                 --exclude='public/storage' \\
                                 --exclude='node_modules' \\
                                 ${BUILD_DIR}/ ${LIVE_DIR}/
+                            
+                            # 2. Finalize Live Site
                             cd ${LIVE_DIR}
                             php artisan migrate --force
                             php artisan config:cache
                             php artisan route:cache
                             php artisan view:cache
                             sudo systemctl reload nginx
+                            
                             echo '✅ DEPLOYMENT SUCCESSFUL'
                         "
                     '''
