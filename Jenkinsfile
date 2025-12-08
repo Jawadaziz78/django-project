@@ -11,14 +11,6 @@ pipeline {
     }
 
     stages {
-        stage('Test') {
-            steps {
-                script {
-                    echo "Skipping local tests (PHP not installed on Jenkins agent)" 
-                }
-            }
-        }
-
         stage('Deploy to Remote Server') {
             steps {
                 sshagent(credentials: [CREDENTIALS_ID]) {
@@ -26,7 +18,7 @@ pipeline {
                         echo "Deploying to ${REMOTE_HOST}..."
                         sh """
                             ssh -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_HOST} '
-                                # Stop pipeline immediately if any command fails
+                                # Stop the script immediately if any command fails
                                 set -e
                                 
                                 echo "1. Navigating to Git Project..."
@@ -38,18 +30,25 @@ pipeline {
                                 echo "3. Entering App Directory..."
                                 cd ${APP_DIR}
                                 
-                                echo "4. Installing Dependencies..."
-                                composer install --no-interaction --prefer-dist --optimize-autoloader
-                                
-                                echo "5. Running Unit Tests (Using In-Memory DB)..."
-                                # The "|| exit 1" ensures Jenkins fails if tests fail
-                                DB_CONNECTION=sqlite DB_DATABASE=:memory: php artisan test || exit 1
-                                
-                                echo "6. Clearing Old Cache..."
+                                echo "4. Clearing Old Config (Crucial for Tests)..."
+                                # Must run this BEFORE tests so Laravel accepts the SQLite change
                                 php artisan config:clear
                                 
-                                echo "7. Running Migrations & Re-caching..."
+                                echo "5. Installing Dependencies..."
+                                composer install --no-interaction --prefer-dist --optimize-autoloader
+                                
+                                echo "6. Running Unit Tests (Using In-Memory DB)..."
+                                # "|| exit 1" ensures Jenkins stops if tests fail
+                                DB_CONNECTION=sqlite DB_DATABASE=:memory: php artisan test || exit 1
+                                
+                                echo "7. Running Migrations..."
                                 php artisan migrate --force
+                                
+                                echo "8. Fixing Permissions (Prevents HTTP 500 Error)..."
+                                # This allows the web server to write to logs/cache
+                                sudo chmod -R 777 storage bootstrap/cache
+                                
+                                echo "9. Optimizing Application..."
                                 php artisan config:cache
                                 php artisan route:cache
                                 php artisan view:cache
