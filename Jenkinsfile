@@ -1,78 +1,49 @@
 pipeline {
     agent any
 
-    stages {
-        stage('Checkout SCM') {
-            steps {
-                checkout scm
-            }
-        }
+    environment {
+        // The Private IP of your Deployment Instance
+        DEPLOY_HOST = '172.31.78.78' 
+        DEPLOY_USER = 'ubuntu'
+        // The specific folder where we will build the project (NOT the live folder yet)
+        BUILD_DIR = '/home/ubuntu/build-staging' 
+    }
 
-        stage('Deploy to Remote Server') {
+    stages {
+        stage('Remote Build') {
             steps {
-                // CORRECTED: Using the ID 'deploy-server-key' from your Jenkins credentials
-                sshagent(credentials: ['deploy-server-key']) {
-                    script {
-                        echo "Deploying to 172.31.77.148..."
-                        sh '''
-                            ssh -o StrictHostKeyChecking=no ubuntu@172.31.77.148 '
-                                # Exit immediately if a command exits with a non-zero status
-                                set -e
-                                
-                                echo "1. Navigating to Git Project..."
-                                cd /home/ubuntu/projects/laravel
-                                
-                                echo "2. Pulling latest code..."
-                                git pull origin main
-                                
-                                echo "3. Entering App Directory..."
-                                cd BookStack
-                                
-                                echo "4. Clearing Old Config..."
-                                php artisan config:clear
-                                php artisan cache:clear
-                                
-                                echo "5. Installing Dependencies..."
-                                composer install --no-interaction --prefer-dist --optimize-autoloader
-                                
-                                echo "6. Preparing Environment & Running Tests..."
-                                # Ensure permissions are correct for logging
-                                sudo chmod -R 777 storage bootstrap/cache
-                                
-                                # --- FIX START ---
-                                # Create a specific testing environment file
-                                cp .env.example .env.testing
-                                
-                                # Force SQLite and Memory Database in the testing config
-                                sed -i "s/DB_CONNECTION=mysql/DB_CONNECTION=sqlite/" .env.testing
-                                sed -i "s/DB_DATABASE=.*$/DB_DATABASE=:memory:/" .env.testing
-                                
-                                # Generate a key for the testing environment
-                                php artisan key:generate --env=testing
-                                
-                                # Run tests using the testing environment explicitly
-                                php artisan test --env=testing
-                                
-                                # Remove the testing env file to keep the server clean
-                                rm .env.testing
-                                # --- FIX END ---
-                                
-                                echo "7. Running Migrations on Production DB..."
-                                # Back to standard environment vars for production migration
-                                php artisan migrate --force
-                                
-                                echo "8. Final Permission Fix..."
-                                sudo chmod -R 777 storage bootstrap/cache
-                                
-                                echo "9. Optimizing Application..."
-                                php artisan config:cache
-                                php artisan route:cache
-                                php artisan view:cache
-                                
-                                echo "SUCCESS: Deployment Complete!"
-                            '
-                        '''
-                    }
+                sshagent(['deployment-server-ssh']) {
+                    sh '''
+                        # Everything inside here runs on the JENKINS instance
+                        # We use SSH to send commands to the DEPLOYMENT instance
+                        
+                        ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
+                            echo '--- Connected to Deployment Instance ---'
+                            
+                            # 1. Create a clean build directory
+                            rm -rf ${BUILD_DIR}
+                            mkdir -p ${BUILD_DIR}
+                            
+                            # 2. Clone the code (Using HTTPS for simplicity)
+                            git clone https://github.com/Jawadaziz78/django-project.git ${BUILD_DIR}
+                            
+                            # 3. Enter directory
+                            cd ${BUILD_DIR}
+                            
+                            # 4. Install Backend Dependencies (using tools on Deployment Instance)
+                            echo '--- Running Composer ---'
+                            composer install --no-interaction --prefer-dist --optimize-autoloader
+                            
+                            # 5. Setup Environment
+                            cp .env.example .env
+                            php artisan key:generate
+                            
+                            # 6. Install Frontend Dependencies & Build
+                            echo '--- Running NPM Build ---'
+                            npm install
+                            npm run build
+                        "
+                    '''
                 }
             }
         }
