@@ -1,6 +1,8 @@
 pipeline {
     agent any
-
+    triggers {
+        githubPush()
+    }
     environment {
         DEPLOY_HOST = '172.31.77.148'
         DEPLOY_USER = 'ubuntu'
