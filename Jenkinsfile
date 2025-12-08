@@ -12,7 +12,7 @@ pipeline {
     stages {
         stage('Remote Build') {
             steps {
-                sshagent(['ubuntu']) {
+                sshagent(['dev-jawad']) {
                     sh '''
                         # Everything inside here runs on the JENKINS instance
                         # We use SSH to send commands to the DEPLOYMENT instance
