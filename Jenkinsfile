@@ -19,22 +19,17 @@ pipeline {
                 sshagent(['deploy-server-key']) {
                     sh '''
                         ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
-                            echo '--- 1. Cleaning Staging Area ---'
                             rm -rf ${BUILD_DIR}
                             mkdir -p ${BUILD_DIR}
                             
-                            echo '--- 2. Cloning Repository ---'
                             git clone https://github.com/Jawadaziz78/django-project.git ${BUILD_DIR}
                             cd ${BUILD_DIR}
                             
-                            echo '--- 3. Installing Backend Dependencies ---'
                             composer install --no-interaction --prefer-dist --optimize-autoloader
                             
-                            echo '--- 4. Setting Environment ---'
                             cp .env.example .env
                             php artisan key:generate --force
                             
-                            echo '--- 5. Building Frontend ---'
                             npm install
                             npm run build
                             
@@ -51,8 +46,6 @@ pipeline {
                     sh '''
                         ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
                             cd ${BUILD_DIR}
-                            
-                            echo '--- Running Unit Tests ---'
                             
                             # Attempting to switch to SQLite using standard Environment Variables
                             export DB_CONNECTION=sqlite
@@ -72,8 +65,6 @@ pipeline {
                 sshagent(['deploy-server-key']) {
                     sh '''
                         ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
-                            echo '--- Starting Safe Deployment ---'
-                            
                             # 1. Sync files to Live Directory
                             # --exclude ensures we DO NOT delete your .env or storage folders
                             rsync -av --delete \\
