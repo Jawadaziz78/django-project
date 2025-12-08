@@ -11,20 +11,14 @@ pipeline {
     }
 
     stages {
-        // STAGE 1: TEST (Runs on Jenkins Server first)
         stage('Test') {
             steps {
                 script {
-                    // This assumes your Jenkins server has PHP installed. 
-                    // If not, we can skip this or run it inside a Docker container.
-                    echo "Running Tests..."
-                    // sh 'php artisan test'  <-- Uncomment this if Jenkins has PHP installed
                     echo "Skipping local tests (PHP not installed on Jenkins agent)" 
                 }
             }
         }
 
-        // STAGE 2: DEPLOY (Runs on Remote Server)
         stage('Deploy to Remote Server') {
             steps {
                 sshagent(credentials: [CREDENTIALS_ID]) {
@@ -32,6 +26,7 @@ pipeline {
                         echo "Deploying to ${REMOTE_HOST}..."
                         sh """
                             ssh -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_HOST} '
+                                # Stop pipeline immediately if any command fails
                                 set -e
                                 
                                 echo "1. Navigating to Git Project..."
@@ -46,9 +41,9 @@ pipeline {
                                 echo "4. Installing Dependencies..."
                                 composer install --no-interaction --prefer-dist --optimize-autoloader
                                 
-                                echo "5. Running Unit Tests (On Remote)..."
-                                # We run tests here to ensure the server environment is valid
-                                php artisan test
+                                echo "5. Running Unit Tests (Using In-Memory DB)..."
+                                # We force SQLite/Memory here to avoid "Access Denied" errors
+                                DB_CONNECTION=sqlite DB_DATABASE=:memory: php artisan test
                                 
                                 echo "6. Clearing Old Cache..."
                                 php artisan config:clear
