@@ -1,7 +1,6 @@
 pipeline {
     agent any
 
-    // Trigger pipeline automatically on Git Push
     triggers {
         githubPush()
     }
@@ -25,11 +24,16 @@ pipeline {
                             git clone https://github.com/Jawadaziz78/django-project.git ${BUILD_DIR}
                             cd ${BUILD_DIR}
                             
-                            composer install --no-interaction --prefer-dist --optimize-autoloader
+                            # --- UNIVERSAL BRANCH SWITCHER ---
+                            # If BRANCH_NAME exists (Multibranch), use it.
+                            # If NOT (Simple Pipeline), default to 'main'.
+                            TARGET_BRANCH="${BRANCH_NAME:-main}"
+                            echo "Checking out branch: \$TARGET_BRANCH"
+                            git checkout \$TARGET_BRANCH
                             
+                            composer install --no-interaction --prefer-dist --optimize-autoloader
                             cp .env.example .env
                             php artisan key:generate --force
-                            
                             npm install
                             npm run build
                             
@@ -46,13 +50,9 @@ pipeline {
                     sh '''
                         ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
                             cd ${BUILD_DIR}
-                            
-                            # Attempting to switch to SQLite using standard Environment Variables
                             export DB_CONNECTION=sqlite
                             export DB_DATABASE=:memory:
-                            
                             php artisan test tests/Unit
-                            
                             echo '✅ TEST STAGE SUCCESS'
                         "
                     '''
@@ -61,12 +61,18 @@ pipeline {
         }
 
         stage('Deploy Stage') {
+            // --- SAFETY GUARD ---
+            // Only runs if the branch is 'main' OR if BRANCH_NAME is empty (Simple Pipeline)
+            when {
+                expression {
+                    return env.BRANCH_NAME == 'main' || env.BRANCH_NAME == null
+                }
+            }
             steps {
                 sshagent(['deploy-server-key']) {
                     sh '''
                         ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
-                            # 1. Sync files to Live Directory
-                            # --exclude ensures we DO NOT delete your .env or storage folders
+                            echo '--- Starting Deployment ---'
                             rsync -av --delete \\
                                 --exclude='.env' \\
                                 --exclude='.git' \\
@@ -75,14 +81,12 @@ pipeline {
                                 --exclude='node_modules' \\
                                 ${BUILD_DIR}/ ${LIVE_DIR}/
                             
-                            # 2. Finalize Live Site
                             cd ${LIVE_DIR}
                             php artisan migrate --force
                             php artisan config:cache
                             php artisan route:cache
                             php artisan view:cache
                             sudo systemctl reload nginx
-                            
                             echo '✅ DEPLOYMENT SUCCESSFUL'
                         "
                     '''
