@@ -53,25 +53,29 @@ pipeline {
                         ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
                             cd ${BUILD_DIR}
                             
-                            echo '--- preparing Test Configuration ---'
-                            # 1. Clear any cached config that might point to MySQL
+                            echo '--- Configuring SQLite for Testing ---'
+                            
+                            # 1. Clear Config Cache first
                             php artisan config:clear
                             
-                            # 2. FORCE 'phpunit.xml' to use SQLite
-                            # We use 'sed' to replace the hardcoded MySQL values in the file.
-                            # This overrides any <server name='DB_CONNECTION' value='mysql'/> tags.
-                            sed -i 's/name=\"DB_CONNECTION\" value=\".*\"/name=\"DB_CONNECTION\" value=\"sqlite\"/' phpunit.xml
-                            sed -i 's/name=\"DB_DATABASE\" value=\".*\"/name=\"DB_DATABASE\" value=\":memory:\"/' phpunit.xml
+                            # 2. PRECISE FIX: Replace 'mysql_testing' with 'sqlite' in phpunit.xml
+                            # We use the exact string found in your file content
+                            sed -i 's/value=\"mysql_testing\"/value=\"sqlite\"/g' phpunit.xml
                             
-                            echo '--- Running Smoke Tests (Unit Only) ---'
-                            php artisan test tests/Unit
+                            # 3. Create a fallback sqlite file (required by some setups)
+                            touch database/database.sqlite
+                            
+                            # 4. Run Tests with explicit inline ENV variables
+                            # This overrides any remaining settings to ensure :memory: is used
+                            echo '--- Running Smoke Tests ---'
+                            DB_CONNECTION=sqlite DB_DATABASE=:memory: php artisan test tests/Unit
                         "
                     '''
                 }
             }
         }
 
-        // --- STAGE 3: DEPLOY (SAFE MODE) ---
+        // --- STAGE 3: DEPLOY ---
         stage('Remote Deploy') {
             steps {
                 sshagent(['deploy-server-key']) {
@@ -80,7 +84,7 @@ pipeline {
                             echo '--- Starting Safe Deployment ---'
                             
                             # 1. Sync Files from Staging to Live
-                            # Protections: Exclude .env, storage, and node_modules to be safe
+                            # Excludes .env and storage to protect your live data
                             rsync -av --delete \\
                                 --exclude='.env' \\
                                 --exclude='.git' \\
