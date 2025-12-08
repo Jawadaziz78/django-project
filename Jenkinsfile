@@ -6,15 +6,15 @@ pipeline {
         DEPLOY_HOST = '172.31.77.148' 
         DEPLOY_USER = 'ubuntu'
         
-        // Staging Folder
+        // Staging Folder (Temporary Build Area)
         BUILD_DIR = '/home/ubuntu/build-staging'
         
-        // Live Website Folder
+        // Live Website Folder (Production)
         LIVE_DIR  = '/home/ubuntu/projects/laravel/BookStack'
     }
 
     stages {
-        // --- STAGE 1: BUILD ---
+        // --- STAGE 1: BUILD (Unchanged & Working) ---
         stage('Remote Build') {
             steps {
                 sshagent(['deploy-server-key']) {
@@ -53,21 +53,24 @@ pipeline {
                         ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
                             cd ${BUILD_DIR}
                             
-                            echo '--- Configuring SQLite for Testing ---'
-                            
-                            # 1. Clear Config Cache first
+                            echo '--- 1. Clearing Config Cache ---'
                             php artisan config:clear
                             
-                            # 2. PRECISE FIX: Replace 'mysql_testing' with 'sqlite' in phpunit.xml
-                            # We use the exact string found in your file content
+                            echo '--- 2. Forcing SQLite in Configuration ---'
+                            # We use sed to physically rewrite the config files to point to SQLite
+                            # This fixes the 'mysql_testing' error you saw in the logs
+                            
+                            # Update phpunit.xml (The root cause)
                             sed -i 's/value=\"mysql_testing\"/value=\"sqlite\"/g' phpunit.xml
                             
-                            # 3. Create a fallback sqlite file (required by some setups)
+                            # Update .env (Just in case)
+                            sed -i 's/DB_CONNECTION=mysql/DB_CONNECTION=sqlite/g' .env
+                            
+                            # Create the database file locally (required as a fallback)
                             touch database/database.sqlite
                             
-                            # 4. Run Tests with explicit inline ENV variables
-                            # This overrides any remaining settings to ensure :memory: is used
-                            echo '--- Running Smoke Tests ---'
+                            echo '--- 3. Running Smoke Tests (Unit Only) ---'
+                            # We pass env vars INLINE to guarantee they override everything else
                             DB_CONNECTION=sqlite DB_DATABASE=:memory: php artisan test tests/Unit
                         "
                     '''
@@ -75,7 +78,7 @@ pipeline {
             }
         }
 
-        // --- STAGE 3: DEPLOY ---
+        // --- STAGE 3: DEPLOY (SAFE MODE) ---
         stage('Remote Deploy') {
             steps {
                 sshagent(['deploy-server-key']) {
@@ -84,7 +87,9 @@ pipeline {
                             echo '--- Starting Safe Deployment ---'
                             
                             # 1. Sync Files from Staging to Live
-                            # Excludes .env and storage to protect your live data
+                            # --delete: Removes old code files (keeps folders clean)
+                            # --exclude: PROTECTS your live .env and user uploads (storage)
+                            
                             rsync -av --delete \\
                                 --exclude='.env' \\
                                 --exclude='.git' \\
