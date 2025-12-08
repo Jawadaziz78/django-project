@@ -10,7 +10,8 @@ pipeline {
 
         stage('Deploy to Remote Server') {
             steps {
-                sshagent(credentials: ['ubuntu']) {
+                // CORRECTED: Using the ID 'deploy-server-key' from your Jenkins credentials
+                sshagent(credentials: ['deploy-server-key']) {
                     script {
                         echo "Deploying to 172.31.77.148..."
                         sh '''
@@ -40,7 +41,6 @@ pipeline {
                                 
                                 # --- FIX START ---
                                 # Create a specific testing environment file
-                                # This overrides the production .env settings shown in your image
                                 cp .env.example .env.testing
                                 
                                 # Force SQLite and Memory Database in the testing config
