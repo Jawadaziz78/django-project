@@ -1,57 +1,64 @@
 pipeline {
     agent any
 
-    environment {
-        // --- CONFIGURATION ---
-        REMOTE_HOST = '172.31.77.148'
-        REMOTE_USER = 'ubuntu'
-        PROJECT_DIR = '/home/ubuntu/projects/laravel'
-        APP_DIR = 'BookStack'
-        CREDENTIALS_ID = 'deploy-server-key' 
-    }
-
     stages {
+        stage('Checkout SCM') {
+            steps {
+                checkout scm
+            }
+        }
+
         stage('Deploy to Remote Server') {
             steps {
-                sshagent(credentials: [CREDENTIALS_ID]) {
+                sshagent(credentials: ['ubuntu']) {
                     script {
-                        echo "Deploying to ${REMOTE_HOST}..."
-                        sh """
-                            ssh -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_HOST} '
-                                # Stop pipeline immediately if any command fails
+                        echo "Deploying to 172.31.77.148..."
+                        sh '''
+                            ssh -o StrictHostKeyChecking=no ubuntu@172.31.77.148 '
+                                # Exit immediately if a command exits with a non-zero status
                                 set -e
                                 
                                 echo "1. Navigating to Git Project..."
-                                cd ${PROJECT_DIR}
+                                cd /home/ubuntu/projects/laravel
                                 
                                 echo "2. Pulling latest code..."
                                 git pull origin main
                                 
                                 echo "3. Entering App Directory..."
-                                cd ${APP_DIR}
+                                cd BookStack
                                 
                                 echo "4. Clearing Old Config..."
                                 php artisan config:clear
+                                php artisan cache:clear
                                 
                                 echo "5. Installing Dependencies..."
                                 composer install --no-interaction --prefer-dist --optimize-autoloader
                                 
                                 echo "6. Preparing Environment & Running Tests..."
-                                # We fix permissions NOW so tests can write to logs
+                                # Ensure permissions are correct for logging
                                 sudo chmod -R 777 storage bootstrap/cache
                                 
-                                # EXPORT variables ensures they apply to the PHPUnit subprocess
-                                export APP_ENV=testing
-                                export DB_CONNECTION=sqlite
-                                export DB_DATABASE=:memory:
+                                # --- FIX START ---
+                                # Create a specific testing environment file
+                                # This overrides the production .env settings shown in your image
+                                cp .env.example .env.testing
                                 
-                                # Run the tests. If this fails, the pipeline stops.
-                                php artisan test
+                                # Force SQLite and Memory Database in the testing config
+                                sed -i "s/DB_CONNECTION=mysql/DB_CONNECTION=sqlite/" .env.testing
+                                sed -i "s/DB_DATABASE=.*$/DB_DATABASE=:memory:/" .env.testing
                                 
-                                echo "7. Running Migrations..."
-                                # Unset testing vars to ensure we migrate the REAL database
-                                unset DB_CONNECTION
-                                unset DB_DATABASE
+                                # Generate a key for the testing environment
+                                php artisan key:generate --env=testing
+                                
+                                # Run tests using the testing environment explicitly
+                                php artisan test --env=testing
+                                
+                                # Remove the testing env file to keep the server clean
+                                rm .env.testing
+                                # --- FIX END ---
+                                
+                                echo "7. Running Migrations on Production DB..."
+                                # Back to standard environment vars for production migration
                                 php artisan migrate --force
                                 
                                 echo "8. Final Permission Fix..."
@@ -64,7 +71,7 @@ pipeline {
                                 
                                 echo "SUCCESS: Deployment Complete!"
                             '
-                        """
+                        '''
                     }
                 }
             }
