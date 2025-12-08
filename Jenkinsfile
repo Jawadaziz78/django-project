@@ -30,23 +30,31 @@ pipeline {
                                 echo "3. Entering App Directory..."
                                 cd ${APP_DIR}
                                 
-                                echo "4. Clearing Old Config (CRITICAL STEP)..."
-                                # We MUST clear the cache BEFORE installing dependencies or running tests
-                                # otherwise Laravel ignores our DB_CONNECTION=sqlite override.
+                                echo "4. Clearing Old Config..."
                                 php artisan config:clear
                                 
                                 echo "5. Installing Dependencies..."
                                 composer install --no-interaction --prefer-dist --optimize-autoloader
                                 
-                                echo "6. Running Unit Tests (Using In-Memory DB)..."
-                                # The "|| exit 1" ensures Jenkins stops and marks as FAILURE if tests fail
-                                DB_CONNECTION=sqlite DB_DATABASE=:memory: php artisan test || exit 1
+                                echo "6. Preparing Environment & Running Tests..."
+                                # We fix permissions NOW so tests can write to logs
+                                sudo chmod -R 777 storage bootstrap/cache
                                 
-                                echo "7. Running Migrations & Re-caching..."
+                                # EXPORT variables ensures they apply to the PHPUnit subprocess
+                                export APP_ENV=testing
+                                export DB_CONNECTION=sqlite
+                                export DB_DATABASE=:memory:
+                                
+                                # Run the tests. If this fails, the pipeline stops.
+                                php artisan test
+                                
+                                echo "7. Running Migrations..."
+                                # Unset testing vars to ensure we migrate the REAL database
+                                unset DB_CONNECTION
+                                unset DB_DATABASE
                                 php artisan migrate --force
                                 
-                                echo "8. Fixing Permissions (Prevents HTTP 500 Error)..."
-                                # Automatically fix permissions for the web server
+                                echo "8. Final Permission Fix..."
                                 sudo chmod -R 777 storage bootstrap/cache
                                 
                                 echo "9. Optimizing Application..."
