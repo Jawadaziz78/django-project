@@ -25,6 +25,9 @@ pipeline {
                             git clone https://github.com/Jawadaziz78/django-project.git ${BUILD_DIR}
                             cd ${BUILD_DIR}
                             
+                            # Ensure we build the correct branch being processed by Jenkins
+                            git checkout ${BRANCH_NAME}
+                            
                             composer install --no-interaction --prefer-dist --optimize-autoloader
                             
                             cp .env.example .env
@@ -61,6 +64,11 @@ pipeline {
         }
 
         stage('Deploy Stage') {
+            // --- SAFETY GUARD ---
+            // This stage runs ONLY if the branch name is 'main'
+            when {
+                branch 'main'
+            }
             steps {
                 sshagent(['deploy-server-key']) {
                     sh '''
