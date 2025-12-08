@@ -42,8 +42,8 @@ pipeline {
                                 composer install --no-interaction --prefer-dist --optimize-autoloader
                                 
                                 echo "5. Running Unit Tests (Using In-Memory DB)..."
-                                # We force SQLite/Memory here to avoid "Access Denied" errors
-                                DB_CONNECTION=sqlite DB_DATABASE=:memory: php artisan test
+                                # The "|| exit 1" ensures Jenkins fails if tests fail
+                                DB_CONNECTION=sqlite DB_DATABASE=:memory: php artisan test || exit 1
                                 
                                 echo "6. Clearing Old Cache..."
                                 php artisan config:clear
