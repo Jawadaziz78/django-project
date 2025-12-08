@@ -20,7 +20,7 @@ pipeline {
                             cd ${BUILD_DIR}
                             composer install --no-interaction --prefer-dist --optimize-autoloader
                             cp .env.example .env
-                            php artisan key:generate
+                            php artisan key:generate --force
                             npm install
                             npm run build
                         "
