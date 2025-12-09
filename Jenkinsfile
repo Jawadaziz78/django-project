@@ -26,7 +26,7 @@ pipeline {
                             git clone https://github.com/Jawadaziz78/django-project.git ${BUILD_DIR}
                             cd ${BUILD_DIR}
                             
-                            # Checks out the branch that triggered the pipeline (main, development, or test)
+                            # Checks out whatever branch triggered this pipeline
                             TARGET_BRANCH="${BRANCH_NAME:-main}"
                             echo "Checking out branch: \$TARGET_BRANCH"
                             git checkout \$TARGET_BRANCH
@@ -42,12 +42,8 @@ pipeline {
         }
 
         stage('Deploy Stage') {
-            when {
-                expression {
-                    // Logic: Allow deployment if the branch is main, development, OR test
-                    return env.BRANCH_NAME == 'main' || env.BRANCH_NAME == 'development' || env.BRANCH_NAME == 'test'
-                }
-            }
+            // --- RESTRICTION REMOVED ---
+            // The 'when' block is gone. This stage now runs for ALL branches.
             steps {
                 sshagent(['deploy-server-key']) {
                     sh '''
