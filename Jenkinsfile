@@ -18,21 +18,14 @@ pipeline {
                 sshagent(['deploy-server-key']) {
                     sh '''
                         ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
-                            # --- FIX: PERMISSION CLEANUP ---
-                            # Uses sudo to ensure we can delete the folder even if permissions are locked
                             sudo rm -rf ${BUILD_DIR}
                             mkdir -p ${BUILD_DIR}
                             
                             git clone https://github.com/Jawadaziz78/django-project.git ${BUILD_DIR}
                             cd ${BUILD_DIR}
                             
-                            # Checks out whatever branch triggered this pipeline
-                            TARGET_BRANCH="${BRANCH_NAME:-main}"
-                            echo "Checking out branch: \$TARGET_BRANCH"
-                            git checkout \$TARGET_BRANCH
-                            
-                            # Note: Composer and NPM commands are REMOVED as requested.
-                            # We assume 'vendor' and 'public/dist' already exist on the live server.
+                            TARGET_BRANCH=\"${BRANCH_NAME:-main}\"
+                            git checkout \\$TARGET_BRANCH
                             
                             echo '✅ BUILD STAGE SUCCESS'
                         "
@@ -41,34 +34,29 @@ pipeline {
             }
         }
 
+        stage('Test Stage') {
+            steps {
+                echo '--- Test Stage (Empty) ---'
+            }
+        }
+
         stage('Deploy Stage') {
-            // --- RESTRICTION REMOVED ---
-            // The 'when' block is gone. This stage now runs for ALL branches.
             steps {
                 sshagent(['deploy-server-key']) {
                     sh '''
                         ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
-                            
-                            # --- SAFETY CHECK ---
-                            # If the build failed or the folder structure is wrong, STOP.
-                            if [ ! -d "${BUILD_DIR}/public" ]; then
-                                echo 'ERROR: Build directory is empty or invalid. Deployment stopped.'
+                            if [ ! -d \"${BUILD_DIR}/public\" ]; then
                                 exit 1
                             fi
 
-                            echo '--- Starting Deployment ---'
-                            echo "Deploying branch: ${BRANCH_NAME}"
-                            
-                            # --- RSYNC WITH EXCLUDES ---
-                            # We exclude 'vendor' and 'public/dist' so they are NOT deleted from the live server
-                            rsync -av --delete \\
-                                --exclude='.env' \\
-                                --exclude='.git' \\
-                                --exclude='storage' \\
-                                --exclude='public/storage' \\
-                                --exclude='node_modules' \\
-                                --exclude='vendor' \\
-                                --exclude='public/dist' \\
+                            rsync -av --delete \
+                                --exclude='.env' \
+                                --exclude='.git' \
+                                --exclude='storage' \
+                                --exclude='public/storage' \
+                                --exclude='node_modules' \
+                                --exclude='vendor' \
+                                --exclude='public/dist' \
                                 ${BUILD_DIR}/ ${LIVE_DIR}/
                             
                             cd ${LIVE_DIR}
