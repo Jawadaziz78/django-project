@@ -1,5 +1,6 @@
 pipeline {
     agent any
+
     triggers {
         githubPush()
     }
@@ -8,7 +9,9 @@ pipeline {
         DEPLOY_HOST = '172.31.77.148'
         DEPLOY_USER = 'ubuntu'
         
-     
+        // --------------------------------------------------------
+        // CHANGE THIS VALUE: 'laravel', 'vue', or 'nextjs'
+        // --------------------------------------------------------
         PROJECT_TYPE = 'laravel'
     }
 
@@ -16,7 +19,7 @@ pipeline {
         stage('Build') {
             steps {
                 sshagent(['deploy-server-key']) {
-                    // USE TRIPLE SINGLE QUOTES (''') TO PREVENT GROOVY ERRORS
+                    // Using triple single quotes (''') prevents the Groovy syntax error
                     sh '''
                         ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
                             set -e
@@ -25,19 +28,16 @@ pipeline {
                             echo '🚀 DEPLOYING: ${PROJECT_TYPE}'
                             echo '-----------------------------------'
 
-                            # The local Jenkins shell expands ${PROJECT_TYPE} before sending to server
+                            # Jenkins injects PROJECT_TYPE and BRANCH_NAME as shell env variables
                             case \\"${PROJECT_TYPE}\\" in
                                 laravel)
                                     # LARAVEL CONFIG
                                     cd /home/ubuntu/projects/laravel
                                     
-                                    # Update Code
                                     git remote set-url origin https://github.com/Jawadaziz78/django-project.git
                                     git fetch origin
-                                    # Shell expands BRANCH_NAME or defaults to 'main'
                                     git reset --hard origin/${BRANCH_NAME:-main}
                                     
-                                    # Build
                                     echo '⚙️ Running Laravel Build...'
                                     php artisan optimize:clear
                                     php artisan config:cache
@@ -53,7 +53,6 @@ pipeline {
                                     git fetch origin
                                     git reset --hard origin/${BRANCH_NAME:-main}
                                     
-                                    # Build
                                     echo '⚙️ Running Vue Build...'
                                     npm run build
                                     ;;
