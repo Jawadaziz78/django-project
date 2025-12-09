@@ -5,7 +5,7 @@ pipeline {
         DEPLOY_HOST = '172.31.77.148'
         DEPLOY_USER = 'ubuntu'
         
-        // CHANGE THIS VALUE: 'laravel', 'vue', or 'nextjs'
+     
         PROJECT_TYPE = 'laravel'
     }
 
@@ -13,76 +13,71 @@ pipeline {
         stage('Build') {
             steps {
                 sshagent(['deploy-server-key']) {
-                    sh """
-                        # Pass variables as arguments ($1, $2) to avoid quote issues
-                        ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} 'bash -s' << 'ENDSSH' "${PROJECT_TYPE}" "${BRANCH_NAME}"
-                            
-                            # 1. READ ARGUMENTS
-                            TYPE=\$1
-                            BRANCH=\${2:-main} # Default to main if empty
-
-                            # Stop on error
+                    // USE TRIPLE SINGLE QUOTES (''') TO PREVENT GROOVY ERRORS
+                    sh '''
+                        ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
                             set -e
+                            
+                            echo '-----------------------------------'
+                            echo '🚀 DEPLOYING: ${PROJECT_TYPE}'
+                            echo '-----------------------------------'
 
-                            echo "--------------------------------------"
-                            echo "🚀 DEPLOYING: \$TYPE (Branch: \$BRANCH)"
-                            echo "--------------------------------------"
-
-                            # 2. SWITCH LOGIC
-                            case "\$TYPE" in
+                            # The local Jenkins shell expands ${PROJECT_TYPE} before sending to server
+                            case \\"${PROJECT_TYPE}\\" in
                                 laravel)
+                                    # LARAVEL CONFIG
                                     cd /home/ubuntu/projects/laravel
-                                    REPO_URL="https://github.com/Jawadaziz78/django-project.git"
                                     
-                                    # Set Remote
-                                    git remote set-url origin \$REPO_URL
-                                    
-                                    # Fetch & Reset
+                                    # Update Code
+                                    git remote set-url origin https://github.com/Jawadaziz78/django-project.git
                                     git fetch origin
-                                    git reset --hard origin/\$BRANCH
+                                    # Shell expands BRANCH_NAME or defaults to 'main'
+                                    git reset --hard origin/${BRANCH_NAME:-main}
                                     
-                                    # Build (Run commands directly)
-                                    echo "⚙️ Running Laravel Build..."
+                                    # Build
+                                    echo '⚙️ Running Laravel Build...'
                                     php artisan optimize:clear
                                     php artisan config:cache
                                     php artisan route:cache
                                     php artisan view:cache
                                     ;;
-
+                                
                                 vue)
+                                    # VUE CONFIG
                                     cd /home/ubuntu/projects/vue/app
-                                    REPO_URL="https://github.com/Jawadaziz78/vue-project.git"
                                     
-                                    git remote set-url origin \$REPO_URL
+                                    git remote set-url origin https://github.com/Jawadaziz78/vue-project.git
                                     git fetch origin
-                                    git reset --hard origin/\$BRANCH
+                                    git reset --hard origin/${BRANCH_NAME:-main}
                                     
-                                    echo "⚙️ Running Vue Build..."
+                                    # Build
+                                    echo '⚙️ Running Vue Build...'
                                     npm run build
                                     ;;
-
+                                
                                 nextjs)
+                                    # NEXTJS CONFIG
                                     cd /home/ubuntu/projects/nextjs/blog
-                                    REPO_URL="https://github.com/Jawadaziz78/nextjs-project.git"
                                     
-                                    git remote set-url origin \$REPO_URL
+                                    git remote set-url origin https://github.com/Jawadaziz78/nextjs-project.git
                                     git fetch origin
-                                    git reset --hard origin/\$BRANCH
+                                    git reset --hard origin/${BRANCH_NAME:-main}
                                     
-                                    echo "⚙️ Running Next.js Build..."
+                                    # Build inside 'web' folder
+                                    echo '⚙️ Running Next.js Build...'
                                     cd web
                                     npm run build
                                     ;;
-
+                                
                                 *)
-                                    echo "❌ Error: Unknown Project Type: \$TYPE"
+                                    echo '❌ Error: PROJECT_TYPE value in Jenkinsfile is incorrect.'
                                     exit 1
                                     ;;
                             esac
-
-                            echo "✅ SUCCESS"
-                        ENDSSH
-                    """
+                            
+                            echo '✅ SUCCESS'
+                        "
+                    '''
                 }
             }
         }
