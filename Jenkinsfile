@@ -32,7 +32,10 @@ pipeline {
                             cp .env.example .env
                             php artisan key:generate --force
                             npm install
-                            npm run build
+                            
+                            # --- UPDATE 1: MEMORY FIX ---
+                            # Increases Node memory limit so it uses Swap instead of crashing
+                            NODE_OPTIONS="--max-old-space-size=2048" npm run build
                             
                             echo '✅ BUILD STAGE SUCCESS'
                         "
@@ -68,6 +71,16 @@ pipeline {
                 sshagent(['deploy-server-key']) {
                     sh '''
                         ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
+                            
+                            # --- UPDATE 2: SAFETY CHECK ---
+                            # If the build failed and 'public' is missing, STOP here.
+                            # This prevents rsync from deleting your live site.
+                            if [ ! -d "${BUILD_DIR}/public" ]; then
+                                echo "ERROR: Build directory is empty or invalid. Deployment stopped to protect live site."
+                                exit 1
+                            fi
+                            # ------------------------------
+
                             echo '--- Starting Deployment ---'
                             rsync -av --delete \\
                                 --exclude='.env' \\
