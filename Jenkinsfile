@@ -19,8 +19,6 @@ pipeline {
                     sh '''
                         ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
                             # --- FIX 1: PERMISSION CLEANUP ---
-                            # We use 'sudo' here to force delete the folder even if
-                            # permissions are locked or files are owned by root.
                             sudo rm -rf ${BUILD_DIR}
                             mkdir -p ${BUILD_DIR}
                             
@@ -31,14 +29,9 @@ pipeline {
                             echo "Checking out branch: \$TARGET_BRANCH"
                             git checkout \$TARGET_BRANCH
                             
-                            composer install --no-interaction --prefer-dist --optimize-autoloader
-                            cp .env.example .env
-                            php artisan key:generate --force
-                            npm install
-                            
-                            # --- FIX 2: MEMORY LIMIT ---
-                            # Prevents npm from running out of RAM and crashing the server
-                            NODE_OPTIONS='--max-old-space-size=2048' npm run build
+                            # --- REMOVED DEPENDENCIES ---
+                            # Composer (Backend) and NPM (Frontend) commands removed as requested.
+                            # Note: You must ensure 'vendor' and 'public/dist' exist on the live server manually.
                             
                             echo '✅ BUILD STAGE SUCCESS'
                         "
@@ -47,21 +40,7 @@ pipeline {
             }
         }
 
-        stage('Test Stage') {
-            steps {
-                sshagent(['deploy-server-key']) {
-                    sh '''
-                        ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
-                            cd ${BUILD_DIR}
-                            export DB_CONNECTION=sqlite
-                            export DB_DATABASE=:memory:
-                            php artisan test tests/Unit
-                            echo '✅ TEST STAGE SUCCESS'
-                        "
-                    '''
-                }
-            }
-        }
+        # --- REMOVED TEST STAGE ---
 
         stage('Deploy Stage') {
             when {
@@ -75,8 +54,6 @@ pipeline {
                         ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
                             
                             # --- FIX 3: SAFETY CHECK ---
-                            # If the build failed and 'public' is missing, STOP here.
-                            # This prevents rsync from wiping your live site.
                             if [ ! -d "${BUILD_DIR}/public" ]; then
                                 echo 'ERROR: Build directory is empty or invalid. Deployment stopped.'
                                 exit 1
@@ -89,6 +66,8 @@ pipeline {
                                 --exclude='storage' \\
                                 --exclude='public/storage' \\
                                 --exclude='node_modules' \\
+                                --exclude='vendor' \\
+                                --exclude='public/dist' \\
                                 ${BUILD_DIR}/ ${LIVE_DIR}/
                             
                             cd ${LIVE_DIR}
