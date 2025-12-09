@@ -18,7 +18,10 @@ pipeline {
                 sshagent(['deploy-server-key']) {
                     sh '''
                         ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
-                            rm -rf ${BUILD_DIR}
+                            # --- FIX 1: PERMISSION CLEANUP ---
+                            # We use 'sudo' here to force delete the folder even if
+                            # permissions are locked or files are owned by root.
+                            sudo rm -rf ${BUILD_DIR}
                             mkdir -p ${BUILD_DIR}
                             
                             git clone https://github.com/Jawadaziz78/django-project.git ${BUILD_DIR}
@@ -32,7 +35,10 @@ pipeline {
                             cp .env.example .env
                             php artisan key:generate --force
                             npm install
-                            NODE_OPTIONS="--max-old-space-size=2048" npm run build
+                            
+                            # --- FIX 2: MEMORY LIMIT ---
+                            # Prevents npm from running out of RAM and crashing the server
+                            NODE_OPTIONS='--max-old-space-size=2048' npm run build
                             
                             echo '✅ BUILD STAGE SUCCESS'
                         "
@@ -58,7 +64,6 @@ pipeline {
         }
 
         stage('Deploy Stage') {
-            
             when {
                 expression {
                     return env.BRANCH_NAME == 'main' || env.BRANCH_NAME == null
@@ -69,12 +74,13 @@ pipeline {
                     sh '''
                         ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
                             
-                    
+                            # --- FIX 3: SAFETY CHECK ---
+                            # If the build failed and 'public' is missing, STOP here.
+                            # This prevents rsync from wiping your live site.
                             if [ ! -d "${BUILD_DIR}/public" ]; then
-                                echo "ERROR: Build directory is empty or invalid. Deployment stopped to protect live site."
+                                echo 'ERROR: Build directory is empty or invalid. Deployment stopped.'
                                 exit 1
                             fi
-                      
 
                             echo '--- Starting Deployment ---'
                             rsync -av --delete \\
