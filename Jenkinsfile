@@ -5,7 +5,7 @@ pipeline {
         DEPLOY_HOST = '172.31.77.148'
         DEPLOY_USER = 'ubuntu'
         
-        // CHANGE THIS: 'laravel', 'vue', or 'nextjs'
+        // CHANGE THIS VALUE: 'laravel', 'vue', or 'nextjs'
         PROJECT_TYPE = 'laravel'
     }
 
@@ -13,44 +13,71 @@ pipeline {
         stage('Build') {
             steps {
                 sshagent(['deploy-server-key']) {
-                    sh '''
+                    sh """
                         ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
                             set -e
+                            
+                            # Define Branch (Default to 'main' if empty)
+                            TARGET_BRANCH='${BRANCH_NAME:-main}'
 
-                            case \"${PROJECT_TYPE}\" in
+                            echo '--------------------------------------'
+                            echo '🚀 DEPLOYING PROJECT: ${PROJECT_TYPE}'
+                            echo '--------------------------------------'
+
+                            # DIRECT EXECUTION - NO EVAL, NO COMPLEX VARIABLES
+                            case '${PROJECT_TYPE}' in
                                 laravel)
-                                    PROJECT_DIR=\"/home/ubuntu/projects/laravel\"
-                                    REPO_URL=\"https://github.com/Jawadaziz78/django-project.git\"
-                                    BUILD_CMD=\"php artisan optimize:clear && php artisan config:cache && php artisan route:cache && php artisan view:cache\"
+                                    cd /home/ubuntu/projects/laravel
+                                    
+                                    # Git Update
+                                    git remote set-url origin https://github.com/Jawadaziz78/django-project.git
+                                    git fetch origin
+                                    git reset --hard origin/\\\$TARGET_BRANCH
+                                    
+                                    # Build Commands
+                                    echo '⚙️ Running Laravel Build...'
+                                    php artisan optimize:clear
+                                    php artisan config:cache
+                                    php artisan route:cache
+                                    php artisan view:cache
                                     ;;
+
                                 vue)
-                                    PROJECT_DIR=\"/home/ubuntu/projects/vue/app\"
-                                    REPO_URL=\"https://github.com/Jawadaziz78/vue-project.git\"
-                                    BUILD_CMD=\"npm run build\"
+                                    cd /home/ubuntu/projects/vue/app
+                                    
+                                    # Git Update
+                                    git remote set-url origin https://github.com/Jawadaziz78/vue-project.git
+                                    git fetch origin
+                                    git reset --hard origin/\\\$TARGET_BRANCH
+                                    
+                                    # Build Commands
+                                    echo '⚙️ Running Vue Build...'
+                                    npm run build
                                     ;;
+
                                 nextjs)
-                                    PROJECT_DIR=\"/home/ubuntu/projects/nextjs/blog\"
-                                    REPO_URL=\"https://github.com/Jawadaziz78/nextjs-project.git\"
-                                    # 'cd web' is required based on your directory structure
-                                    BUILD_CMD=\"cd web && npm run build\"
+                                    cd /home/ubuntu/projects/nextjs/blog
+                                    
+                                    # Git Update
+                                    git remote set-url origin https://github.com/Jawadaziz78/nextjs-project.git
+                                    git fetch origin
+                                    git reset --hard origin/\\\$TARGET_BRANCH
+                                    
+                                    # Build Commands
+                                    echo '⚙️ Running Next.js Build...'
+                                    cd web
+                                    npm run build
                                     ;;
+
                                 *)
+                                    echo '❌ Error: Unknown Project Type'
                                     exit 1
                                     ;;
                             esac
 
-                            cd \${PROJECT_DIR}
-
-                            # Force the correct remote URL directly
-                            git remote set-url origin \${REPO_URL}
-
-                            # Fetch and reset to the branch (Defaults to 'main' if BRANCH_NAME is not set)
-                            git fetch origin
-                            git reset --hard origin/${BRANCH_NAME:-main}
-
-                            \${BUILD_CMD}
+                            echo '✅ SUCCESS'
                         "
-                    '''
+                    """
                 }
             }
         }
