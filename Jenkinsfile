@@ -1,71 +1,54 @@
 pipeline {
     agent any
 
-    triggers {
-        githubPush()
-    }
-
     environment {
         DEPLOY_HOST = '172.31.77.148'
         DEPLOY_USER = 'ubuntu'
-        BUILD_DIR   = '/home/ubuntu/build-staging'
-        LIVE_DIR    = '/home/ubuntu/projects/laravel/BookStack'
+        
+        // CHANGE THIS: 'laravel', 'vue', or 'nextjs'
+        PROJECT_TYPE = 'laravel'
     }
 
     stages {
-        stage('Build Stage') {
+        stage('Build') {
             steps {
                 sshagent(['deploy-server-key']) {
                     sh '''
                         ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
-                            sudo rm -rf ${BUILD_DIR}
-                            mkdir -p ${BUILD_DIR}
-                            
-                            git clone https://github.com/Jawadaziz78/django-project.git ${BUILD_DIR}
-                            cd ${BUILD_DIR}
-                            
-                            TARGET_BRANCH=\"${BRANCH_NAME:-main}\"
-                            git checkout \\$TARGET_BRANCH
-                            
-                            echo '✅ BUILD STAGE SUCCESS'
-                        "
-                    '''
-                }
-            }
-        }
+                            set -e
 
-        stage('Test Stage') {
-            steps {
-                echo '--- Test Stage (Empty) ---'
-            }
-        }
+                            case \"${PROJECT_TYPE}\" in
+                                laravel)
+                                    PROJECT_DIR=\"/home/ubuntu/projects/laravel\"
+                                    REPO_URL=\"https://github.com/Jawadaziz78/django-project.git\"
+                                    BUILD_CMD=\"php artisan optimize:clear && php artisan config:cache && php artisan route:cache && php artisan view:cache\"
+                                    ;;
+                                vue)
+                                    PROJECT_DIR=\"/home/ubuntu/projects/vue/app\"
+                                    REPO_URL=\"https://github.com/Jawadaziz78/vue-project.git\"
+                                    BUILD_CMD=\"npm run build\"
+                                    ;;
+                                nextjs)
+                                    PROJECT_DIR=\"/home/ubuntu/projects/nextjs/blog\"
+                                    REPO_URL=\"https://github.com/Jawadaziz78/nextjs-project.git\"
+                                    # 'cd web' is required based on your directory structure
+                                    BUILD_CMD=\"cd web && npm run build\"
+                                    ;;
+                                *)
+                                    exit 1
+                                    ;;
+                            esac
 
-        stage('Deploy Stage') {
-            steps {
-                sshagent(['deploy-server-key']) {
-                    sh '''
-                        ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
-                            if [ ! -d \"${BUILD_DIR}/public\" ]; then
-                                exit 1
-                            fi
+                            cd \${PROJECT_DIR}
 
-                            rsync -av --delete \
-                                --exclude='.env' \
-                                --exclude='.git' \
-                                --exclude='storage' \
-                                --exclude='public/storage' \
-                                --exclude='node_modules' \
-                                --exclude='vendor' \
-                                --exclude='public/dist' \
-                                ${BUILD_DIR}/ ${LIVE_DIR}/
-                            
-                            cd ${LIVE_DIR}
-                            php artisan migrate --force
-                            php artisan config:cache
-                            php artisan route:cache
-                            php artisan view:cache
-                            sudo systemctl reload nginx
-                            echo '✅ DEPLOYMENT SUCCESSFUL'
+                            # Force the correct remote URL directly
+                            git remote set-url origin \${REPO_URL}
+
+                            # Fetch and reset to the branch (Defaults to 'main' if BRANCH_NAME is not set)
+                            git fetch origin
+                            git reset --hard origin/${BRANCH_NAME:-main}
+
+                            \${BUILD_CMD}
                         "
                     '''
                 }
