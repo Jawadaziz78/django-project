@@ -24,9 +24,6 @@ pipeline {
                             git clone https://github.com/Jawadaziz78/django-project.git ${BUILD_DIR}
                             cd ${BUILD_DIR}
                             
-                            # --- UNIVERSAL BRANCH SWITCHER ---
-                            # If BRANCH_NAME exists (Multibranch), use it.
-                            # If NOT (Simple Pipeline), default to 'main'.
                             TARGET_BRANCH="${BRANCH_NAME:-main}"
                             echo "Checking out branch: \$TARGET_BRANCH"
                             git checkout \$TARGET_BRANCH
@@ -61,8 +58,7 @@ pipeline {
         }
 
         stage('Deploy Stage') {
-            // --- SAFETY GUARD ---
-            // Only runs if the branch is 'main' OR if BRANCH_NAME is empty (Simple Pipeline)
+            
             when {
                 expression {
                     return env.BRANCH_NAME == 'main' || env.BRANCH_NAME == null
