@@ -8,128 +8,128 @@ pipeline {
     environment {
         DEPLOY_HOST = '172.31.77.148'
         DEPLOY_USER = 'ubuntu'
-        
+        BUILD_DIR   = '/home/ubuntu/build-staging'
+        SLACK_URL   = 'https://hooks.slack.com/services/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'
+
         // -----------------------------------------------------
-        // CHANGE THIS VALUE PER REPO: 'laravel', 'vue', or 'nextjs'
+        // CHANGE THIS PER REPO: 'laravel', 'vue', or 'nextjs'
         // -----------------------------------------------------
         PROJECT_TYPE = 'laravel'
     }
 
     stages {
-        stage('Build') {
-            steps {
-                sshagent(['deploy-server-key']) {
-                    sh '''
-                        ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
-                            # Force Load NVM (Node 20)
-                            export NVM_DIR="\\$HOME/.nvm"
-                            [ -s "\\$NVM_DIR/nvm.sh" ] && . "\\$NVM_DIR/nvm.sh"
-                            nvm use 20
-
-                            set -e
-                            echo '-----------------------------------'
-                            echo '🚀 STARTING BUILD FOR: ${PROJECT_TYPE}'
-                            echo '-----------------------------------'
-                            
-                            case \\"${PROJECT_TYPE}\\" in
-                                laravel)
-                                    cd /home/ubuntu/projects/laravel
-                                    git remote set-url origin https://github.com/Jawadaziz78/django-project.git
-                                    git fetch origin
-                                    git reset --hard origin/${BRANCH_NAME:-main}
-                                    
-                                    # Clear cache to ensure clean build
-                                    php artisan optimize:clear
-                                    ;;
-                                
-                                vue)
-                                    cd /home/ubuntu/projects/vue/app
-                                    git remote set-url origin https://github.com/Jawadaziz78/vue-project.git
-                                    git fetch origin
-                                    git reset --hard origin/${BRANCH_NAME:-main}
-                                    
-                                    # Build assets (No Install)
-                                    echo '⚙️ Building Vue...'
-                                    npm run build
-                                    ;;
-                                
-                                nextjs)
-                                    cd /home/ubuntu/projects/nextjs/blog
-                                    git remote set-url origin https://github.com/Jawadaziz78/nextjs-project.git
-                                    git fetch origin
-                                    git reset --hard origin/${BRANCH_NAME:-main}
-                                    
-                                    cd web
-                                    
-                                    # FIX: Remove old build artifacts to prevent cache errors
-                                    echo '🧹 Cleaning old build...'
-                                    rm -rf .next
-                                    
-                                    # Build assets (No Install)
-                                    echo '⚙️ Building Next.js...'
-                                    npm run build
-                                    ;;
-                                
-                                *)
-                                    exit 1
-                                    ;;
-                            esac
-                        "
-                    '''
-                }
-            }
-        }
-
-        stage('Test') {
-            steps {
-                echo 'Test Stage is currently empty.'
-            }
-        }
-
         stage('Deploy') {
             steps {
                 sshagent(['deploy-server-key']) {
                     sh '''
                         ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
                             set -e
+                            
+                            # -------------------------------------------------------
+                            # 1. SETUP VARIABLES (Correct Live Paths from your logs)
+                            # -------------------------------------------------------
+                            case \\"${PROJECT_TYPE}\\" in
+                                laravel)
+                                    # Based on your previous logs
+                                    LIVE_DIR='/home/ubuntu/projects/laravel'
+                                    REPO_URL='https://github.com/Jawadaziz78/django-project.git'
+                                    ;;
+                                vue)
+                                    LIVE_DIR='/home/ubuntu/projects/vue/app'
+                                    REPO_URL='https://github.com/Jawadaziz78/vue-project.git'
+                                    ;;
+                                nextjs)
+                                    LIVE_DIR='/home/ubuntu/projects/nextjs/blog'
+                                    REPO_URL='https://github.com/Jawadaziz78/nextjs-project.git'
+                                    ;;
+                                *)
+                                    echo '❌ Error: Unknown Project Type'; exit 1 ;;
+                            esac
+
                             echo '-----------------------------------'
-                            echo '🚀 STARTING DEPLOY FOR: ${PROJECT_TYPE}'
+                            echo '🚀 DEPLOYING: ${PROJECT_TYPE}'
+                            echo '📂 Staging: ${BUILD_DIR}'
+                            echo '📂 Live: '$LIVE_DIR
                             echo '-----------------------------------'
+
+                            # -------------------------------------------------------
+                            # 2. PREPARE STAGING (Clean Clone)
+                            # -------------------------------------------------------
+                            # Clean build directory
+                            sudo rm -rf ${BUILD_DIR}
+                            mkdir -p ${BUILD_DIR}
+                            
+                            # Clone fresh code
+                            git clone \\$REPO_URL ${BUILD_DIR}
+                            cd ${BUILD_DIR}
+                            git checkout ${BRANCH_NAME:-main}
+
+                            # -------------------------------------------------------
+                            # 3. RSYNC TO LIVE (The Safe Deployment)
+                            # -------------------------------------------------------
+                            # Ensure live directory exists
+                            mkdir -p \\$LIVE_DIR
+
+                            # Sync files BUT exclude config/vendor (keeps existing deps)
+                            rsync -av --delete --exclude='.env' --exclude='.git' --exclude='storage' --exclude='public/storage' --exclude='node_modules' --exclude='vendor' --exclude='public/dist' ${BUILD_DIR}/ \\$LIVE_DIR/
+
+                            # -------------------------------------------------------
+                            # 4. RUN POST-DEPLOY COMMANDS (Using existing Live Dependencies)
+                            # -------------------------------------------------------
+                            cd \\$LIVE_DIR
+
+                            # Load Node 20 (Required for Vue/Next.js)
+                            export NVM_DIR=\\"\\$HOME/.nvm\\"
+                            [ -s \\"\\$NVM_DIR/nvm.sh\\" ] && . \\"\\$NVM_DIR/nvm.sh\\"
+                            nvm use 20
 
                             case \\"${PROJECT_TYPE}\\" in
                                 laravel)
-                                    cd /home/ubuntu/projects/laravel
+                                    echo '⚙️ Running Laravel Tasks...'
+                                    # Fixes the 'Access Denied' error by clearing bad config cache
+                                    php artisan config:clear
+                                    php artisan cache:clear
                                     
-                                    echo '⚙️ Running Laravel Deployment Tasks...'
                                     php artisan migrate --force
                                     php artisan config:cache
                                     php artisan route:cache
                                     php artisan view:cache
-                                    
-                                    echo '🔄 Reloading Nginx...'
                                     sudo systemctl reload nginx
                                     ;;
                                 
                                 vue)
-                                    echo '🔄 Reloading Nginx...'
+                                    echo '⚙️ Building Vue (using existing node_modules)...'
+                                    npm run build
                                     sudo systemctl reload nginx
                                     ;;
                                 
                                 nextjs)
-                                    echo '🔄 Restarting PM2 processes...'
-                                    # RESTART PM2
-                                    pm2 restart all
+                                    echo '⚙️ Building Next.js (using existing node_modules)...'
+                                    cd web
                                     
-                                    echo '🔄 Reloading Nginx...'
+                                    # Clean old build cache to prevent errors
+                                    rm -rf .next
+                                    
+                                    npm run build
+                                    pm2 restart all
                                     sudo systemctl reload nginx
                                     ;;
                             esac
-
+                            
                             echo '✅ DEPLOYMENT SUCCESSFUL'
                         "
                     '''
                 }
             }
+        }
+    }
+
+    post {
+        success {
+            sh "curl -X POST -H 'Content-type: application/json' --data '{\"text\":\"✅ Deployment SUCCESS: ${env.JOB_NAME} (Build #${env.BUILD_NUMBER})\"}' ${SLACK_URL}"
+        }
+        failure {
+            sh "curl -X POST -H 'Content-type: application/json' --data '{\"text\":\"❌ Deployment FAILED: ${env.JOB_NAME} (Build #${env.BUILD_NUMBER})\"}' ${SLACK_URL}"
         }
     }
 }
