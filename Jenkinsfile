@@ -18,6 +18,48 @@ pipeline {
     }
 
     stages {
+        stage('Build') {
+            steps {
+                sshagent(['deploy-server-key']) {
+                    sh '''
+                        ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
+                            set -e
+                            
+                            # 1. IDENTIFY REPO URL
+                            case \\"${PROJECT_TYPE}\\" in
+                                laravel) REPO_URL='https://github.com/Jawadaziz78/django-project.git' ;;
+                                vue)     REPO_URL='https://github.com/Jawadaziz78/vue-project.git' ;;
+                                nextjs)  REPO_URL='https://github.com/Jawadaziz78/nextjs-project.git' ;;
+                                *)       echo '❌ Error: Unknown Project Type'; exit 1 ;;
+                            esac
+
+                            echo '-----------------------------------'
+                            echo '🚀 STAGE 1: BUILD (Cloning Code)'
+                            echo '-----------------------------------'
+
+                            # 2. PREPARE STAGING DIRECTORY
+                            sudo rm -rf ${BUILD_DIR}
+                            mkdir -p ${BUILD_DIR}
+                            
+                            # 3. CLONE CODE
+                            git clone \\$REPO_URL ${BUILD_DIR}
+                            cd ${BUILD_DIR}
+                            git checkout ${BRANCH_NAME:-main}
+                            
+                            echo '✅ Build/Clone Successful'
+                        "
+                    '''
+                }
+            }
+        }
+
+        stage('Test') {
+            steps {
+                // Empty Stage as requested
+                echo '⚠️ Test Stage is currently empty.'
+            }
+        }
+
         stage('Deploy') {
             steps {
                 sshagent(['deploy-server-key']) {
@@ -25,57 +67,26 @@ pipeline {
                         ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
                             set -e
                             
-                            # -------------------------------------------------------
-                            # 1. SETUP VARIABLES
-                            # -------------------------------------------------------
+                            # 1. IDENTIFY LIVE DIRECTORY
                             case \\"${PROJECT_TYPE}\\" in
-                                laravel)
-                                    # FIXED: Added /BookStack to match your working config
-                                    LIVE_DIR='/home/ubuntu/projects/laravel/BookStack'
-                                    REPO_URL='https://github.com/Jawadaziz78/django-project.git'
-                                    ;;
-                                vue)
-                                    LIVE_DIR='/home/ubuntu/projects/vue/app'
-                                    REPO_URL='https://github.com/Jawadaziz78/vue-project.git'
-                                    ;;
-                                nextjs)
-                                    LIVE_DIR='/home/ubuntu/projects/nextjs/blog'
-                                    REPO_URL='https://github.com/Jawadaziz78/nextjs-project.git'
-                                    ;;
-                                *)
-                                    echo '❌ Error: Unknown Project Type'; exit 1 ;;
+                                laravel) LIVE_DIR='/home/ubuntu/projects/laravel/BookStack' ;; # FIXED PATH
+                                vue)     LIVE_DIR='/home/ubuntu/projects/vue/app' ;;
+                                nextjs)  LIVE_DIR='/home/ubuntu/projects/nextjs/blog' ;;
                             esac
 
                             echo '-----------------------------------'
-                            echo '🚀 DEPLOYING: ${PROJECT_TYPE}'
-                            echo '📂 Staging: ${BUILD_DIR}'
-                            echo '📂 Live: '$LIVE_DIR
+                            echo '🚀 STAGE 3: DEPLOY (Rsync & Config)'
+                            echo '📂 Target: '$LIVE_DIR
                             echo '-----------------------------------'
 
-                            # -------------------------------------------------------
-                            # 2. PREPARE STAGING
-                            # -------------------------------------------------------
-                            sudo rm -rf ${BUILD_DIR}
-                            mkdir -p ${BUILD_DIR}
-                            
-                            git clone \\$REPO_URL ${BUILD_DIR}
-                            cd ${BUILD_DIR}
-                            git checkout ${BRANCH_NAME:-main}
-
-                            # -------------------------------------------------------
-                            # 3. RSYNC TO LIVE
-                            # -------------------------------------------------------
+                            # 2. RSYNC TO LIVE (Preserve .env and vendor)
                             mkdir -p \\$LIVE_DIR
-
-                            # Exclude .env to protect your secrets
                             rsync -av --delete --exclude='.env' --exclude='.git' --exclude='storage' --exclude='public/storage' --exclude='node_modules' --exclude='vendor' --exclude='public/dist' ${BUILD_DIR}/ \\$LIVE_DIR/
 
-                            # -------------------------------------------------------
-                            # 4. RUN POST-DEPLOY COMMANDS
-                            # -------------------------------------------------------
+                            # 3. RUN POST-DEPLOY COMMANDS
                             cd \\$LIVE_DIR
 
-                            # Load Node 20
+                            # Load Node 20 (Required for Vue/Next.js)
                             export NVM_DIR=\\"\\$HOME/.nvm\\"
                             [ -s \\"\\$NVM_DIR/nvm.sh\\" ] && . \\"\\$NVM_DIR/nvm.sh\\"
                             nvm use 20
@@ -95,13 +106,13 @@ pipeline {
                                     ;;
                                 
                                 vue)
-                                    echo '⚙️ Building Vue...'
+                                    echo '⚙️ Building Vue (using existing node_modules)...'
                                     npm run build
                                     sudo systemctl reload nginx
                                     ;;
                                 
                                 nextjs)
-                                    echo '⚙️ Building Next.js...'
+                                    echo '⚙️ Building Next.js (using existing node_modules)...'
                                     cd web
                                     rm -rf .next
                                     npm run build
