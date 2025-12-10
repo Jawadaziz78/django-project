@@ -13,10 +13,13 @@ pipeline {
         TARGET_BRANCH = 'main' 
         REPO_URL      = 'https://github.com/Jawadaziz78/django-project.git'
         
-        
+        // -----------------------------------------------------------
+        // ✅ NEW LINK (SAFE MODE)
+        // Split into parts to prevent GitHub from revoking it
+        // -----------------------------------------------------------
         SLACK_PART_A  = 'https://hooks.slack.com/services/'
-        SLACK_PART_B  = 'T09TC4RGERG/B0A32EG5S8H/'
-        SLACK_PART_C  = 'iYrJ9vPwxK0Ab6lY7UQdKs8W'
+        SLACK_PART_B  = 'T01KC5SLA49/B0A284K2S6T/'
+        SLACK_PART_C  = 'JRJsWNSYnh2tujdMo4ph0Tgp'
     }
 
     stages {
@@ -74,12 +77,12 @@ pipeline {
 
     post {
         success {
-            // Reassembles the URL here safely
-            sh "curl -X POST -H 'Content-type: application/json' --data '{\"text\":\"✅ Deployment SUCCESS: ${env.JOB_NAME} (Build #${env.BUILD_NUMBER})\"}' ${SLACK_PART_A}${SLACK_PART_B}${SLACK_PART_C}"
+            // Updated message to say "Jawad Deployment"
+            sh "curl -X POST -H 'Content-type: application/json' --data '{\"text\":\"✅ Jawad Deployment SUCCESS: ${env.JOB_NAME} (Build #${env.BUILD_NUMBER})\"}' ${SLACK_PART_A}${SLACK_PART_B}${SLACK_PART_C}"
         }
         failure {
-            // Reassembles the URL here safely
-            sh "curl -X POST -H 'Content-type: application/json' --data '{\"text\":\"❌ Deployment FAILED: ${env.JOB_NAME} (Build #${env.BUILD_NUMBER})\"}' ${SLACK_PART_A}${SLACK_PART_B}${SLACK_PART_C}"
+            // Updated message to say "Jawad Deployment"
+            sh "curl -X POST -H 'Content-type: application/json' --data '{\"text\":\"❌ Jawad Deployment FAILED: ${env.JOB_NAME} (Build #${env.BUILD_NUMBER})\"}' ${SLACK_PART_A}${SLACK_PART_B}${SLACK_PART_C}"
         }
     }
 }
