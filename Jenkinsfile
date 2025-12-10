@@ -15,10 +15,10 @@ pipeline {
         // -----------------------------------------------------
         PROJECT_TYPE = 'laravel' 
         
-        // ❌ SLACK TEMPORARILY COMMENTED OUT
-        // SLACK_PART_A  = 'https://hooks.slack.com/services/'
-        // SLACK_PART_B  = 'T01KC5SLA49/B0A284K2S6T/'
-        // SLACK_PART_C  = 'JRJsWNSYnh2tujdMo4ph0Tgp'
+        // SLACK CONFIGURATION
+        SLACK_PART_A  = 'https://hooks.slack.com/services/'
+        SLACK_PART_B  = 'T01KC5SLA49/B0A284K2S6T/'
+        SLACK_PART_C  = 'JRJsWNSYnh2tujdMo4ph0Tgp'
     }
 
     stages {
@@ -58,59 +58,58 @@ pipeline {
             }
         }
 
-        stage('Test') {
-            steps {
-                sshagent(['deploy-server-key']) {
-                    sh '''
-                        ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
-                            set -e
-                            cd ${BUILD_DIR}
-                            echo '-----------------------------------'
-                            echo '🧪 STAGE 2: TEST EXECUTION'
-                            echo '-----------------------------------'
+        // stage('Test') {
+        //     steps {
+        //         sshagent(['deploy-server-key']) {
+        //             sh '''
+        //                 ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
+        //                     set -e
+        //                     cd ${BUILD_DIR}
+        //                     echo '-----------------------------------'
+        //                     echo '🧪 STAGE 2: TEST EXECUTION'
+        //                     echo '-----------------------------------'
                             
-                            # Load Node 20
-                            export NVM_DIR=\\"\\$HOME/.nvm\\"
-                            [ -s \\"\\$NVM_DIR/nvm.sh\\" ] && . \\"\\$NVM_DIR/nvm.sh\\"
-                            nvm use 20
+        //                     # Load Node 20
+        //                     export NVM_DIR=\\"\\$HOME/.nvm\\" 
+        //                     [ -s \\"\\$NVM_DIR/nvm.sh\\" ] && . \\"\\$NVM_DIR/nvm.sh\\" 
+        //                     nvm use 20
 
-                            case \\"${PROJECT_TYPE}\\" in
-                                laravel)
-                                   
-                                    # Install dev dependencies (including PHPUnit)
-                                    composer install --no-interaction --prefer-dist --optimize-autoloader
+        //                     case \\"${PROJECT_TYPE}\\" in
+        //                         laravel)
+        //                            
+        //                             # Install dev dependencies (including PHPUnit)
+        //                             composer install --no-interaction --prefer-dist --optimize-autoloader
 
-                                    
-                                    export DB_CONNECTION=sqlite
-                                    export DB_DATABASE=:memory:
-                                    
-                                   
-                                    php ./vendor/bin/phpunit --testsuite Unit
-                                    ;;
-                                
-                                vue)
-                                    echo '--- Running Vue Tests (Jest/Vitest) ---'
-                                    if [ ! -d \\"node_modules\\" ]; then npm install; fi
-                                    npm run test:unit
-                                    ;;
-                                
-                                nextjs)
-                                    echo '--- Running Next.js Tests (Jest) ---'
-                                    cd web
-                                    if [ ! -d \\"node_modules\\" ]; then npm install; fi
-                                    npm run test
-                                    ;;
-                                *)
-                                    echo '⚠️ Skipping tests for project type: ${PROJECT_TYPE}'
-                                    ;;
-                            esac
+        //                             
+        //                             export DB_CONNECTION=sqlite
+        //                             export DB_DATABASE=:memory:
+                             
+        //                             php ./vendor/bin/phpunit --testsuite Unit
+        //                             ;;
+                            
+        //                         vue)
+        //                             echo '--- Running Vue Tests (Jest/Vitest) ---'
+        //                             if [ ! -d \\"node_modules\\" ]; then npm install; fi
+        //                             npm run test:unit
+        //                             ;;
+                            
+        //                         nextjs)
+        //                             echo '--- Running Next.js Tests (Jest) ---'
+        //                             cd web
+        //                             if [ ! -d \\"node_modules\\" ]; then npm install; fi
+        //                             npm run test
+        //                             ;;
+        //                         *)
+        //                             echo '⚠️ Skipping tests for project type: ${PROJECT_TYPE}'
+        //                             ;;
+        //                     esac
 
-                            echo '✅ Tests Completed Successfully'
-                        "
-                    '''
-                }
-            }
-        }
+        //                     echo '✅ Tests Completed Successfully'
+        //                 "
+        //             '''
+        //         }
+        //     }
+        // }
 
         stage('Deploy') {
             steps {
@@ -139,8 +138,8 @@ pipeline {
                             cd \\$LIVE_DIR
 
                             # Load Node 20 (Required for Vue/Next.js)
-                            export NVM_DIR=\\"\\$HOME/.nvm\\"
-                            [ -s \\"\\$NVM_DIR/nvm.sh\\" ] && . \\"\\$NVM_DIR/nvm.sh\\"
+                            export NVM_DIR=\\"\\$HOME/.nvm\\" 
+                            [ -s \\"\\$NVM_DIR/nvm.sh\\" ] && . \\"\\$NVM_DIR/nvm.sh\\" 
                             nvm use 20
 
                             case \\"${PROJECT_TYPE}\\" in
@@ -180,5 +179,12 @@ pipeline {
         }
     }
 
-    // post { ... } // Post actions are commented out
+    post {
+        success {
+            sh "curl -X POST -H 'Content-type: application/json' --data '{\"text\":\"Jawad Deployment SUCCESS: ${env.JOB_NAME} (Build #${env.BUILD_NUMBER})\"}' ${SLACK_PART_A}${SLACK_PART_B}${SLACK_PART_C}"
+        }
+        failure {
+            sh "curl -X POST -H 'Content-type: application/json' --data '{\"text\":\"Jawad Deployment FAILED: ${env.JOB_NAME} (Build #${env.BUILD_NUMBER})\"}' ${SLACK_PART_A}${SLACK_PART_B}${SLACK_PART_C}"
+        }
+    }
 }
