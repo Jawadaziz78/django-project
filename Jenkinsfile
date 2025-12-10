@@ -13,7 +13,7 @@ pipeline {
         // -----------------------------------------------------
         // CHANGE THIS PER REPO: 'laravel', 'vue', or 'nextjs'
         // -----------------------------------------------------
-        PROJECT_TYPE = 'laravel'
+        PROJECT_TYPE = 'laravel' // Set to 'laravel' to test this fix
         
         // ❌ SLACK TEMPORARILY COMMENTED OUT
         // SLACK_PART_A  = 'https://hooks.slack.com/services/'
@@ -77,15 +77,15 @@ pipeline {
                             case \\"${PROJECT_TYPE}\\" in
                                 laravel)
                                     echo '--- Running Laravel Smoke Tests (Unit Only) ---'
-                                    # Dependencies must be installed for artisan to work
-                                    composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader || true
+                                    # Dependencies must be installed for artisan/phpunit to work
+                                    composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
 
                                     # Use in-memory SQLite database for fast unit testing
                                     export DB_CONNECTION=sqlite
                                     export DB_DATABASE=:memory:
                                     
-                                    # Run quick unit tests
-                                    php artisan test tests/Unit
+                                    # ✅ CORRECTED COMMAND: Use phpunit binary directly
+                                    php ./vendor/bin/phpunit --testsuite Unit
                                     ;;
                                 
                                 vue)
@@ -93,7 +93,6 @@ pipeline {
                                     # Install dependencies only if node_modules is missing
                                     if [ ! -d \\"node_modules\\" ]; then npm install; fi
                                     
-                                    # Run Vue/JS tests (Adjust the test command as necessary for your project)
                                     npm run test:unit
                                     ;;
                                 
@@ -103,7 +102,6 @@ pipeline {
                                     # Install dependencies only if node_modules is missing
                                     if [ ! -d \\"node_modules\\" ]; then npm install; fi
 
-                                    # Run Next.js tests (Adjust the test command as necessary for your project)
                                     npm run test
                                     ;;
                                 *)
