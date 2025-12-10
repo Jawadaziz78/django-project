@@ -21,42 +21,30 @@ pipeline {
         SLACK_PART_C  = 'JRJsWNSYnh2tujdMo4ph0Tgp'
     }
 
-    stages {
-        stage('Build') {
-            steps {
-                sshagent(['deploy-server-key']) {
-                    sh '''
-                        ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
-                            set -e
-                            
-                            # 1. IDENTIFY REPO URL
-                            case \\"${PROJECT_TYPE}\\" in
-                                laravel) REPO_URL='https://github.com/Jawadaziz78/django-project.git' ;;
-                                vue)     REPO_URL='https://github.com/Jawadaziz78/vue-project.git' ;;
-                                nextjs)  REPO_URL='https://github.com/Jawadaziz78/nextjs-project.git' ;;
-                                *)       echo '❌ Error: Unknown Project Type'; exit 1 ;;
-                            esac
+   stage('Build') {
+    steps {
+        sshagent(['deploy-server-key']) {
+            sh '''
+                ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
+                    set -e
 
-                            echo '-----------------------------------'
-                            echo '🚀 STAGE 1: BUILD (Cloning Code)'
-                            echo '-----------------------------------'
+                    echo '-----------------------------------'
+                    echo '🚀 STAGE 1: BUILD (Checkout Code)'
+                    echo '-----------------------------------'
 
-                            # 2. PREPARE STAGING DIRECTORY
-                            sudo rm -rf ${BUILD_DIR}
-                            mkdir -p ${BUILD_DIR}
-                            
-                            # 3. CLONE CODE
-                            git clone \\$REPO_URL ${BUILD_DIR}
-                            cd ${BUILD_DIR}
-                            # Use BRANCH_NAME provided by Jenkins, default to 'main' if not set
-                            git checkout ${BRANCH_NAME:-main} 
-                            
-                            echo '✅ Build/Clone Successful'
-                        "
-                    '''
-                }
-            }
+                    # Use Jenkins' built-in checkout mechanism to get the latest code for the branch
+                    checkout scm
+
+                    # After checkout, ensure we are on the correct branch (BRANCH_NAME set by Jenkins or defaults to 'main')
+                    git checkout ${BRANCH_NAME:-main}
+
+                    echo '✅ Build/Checkout Successful'
+                "
+            '''
         }
+    }
+}
+
 
         // stage('Test') {
         //     steps {
