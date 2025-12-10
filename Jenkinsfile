@@ -30,7 +30,7 @@ pipeline {
                             set -e
                             
                             # 1. IDENTIFY REPO URL
-                            case \\"${PROJECT_TYPE}\\" in
+                            case \"${PROJECT_TYPE}\" in
                                 laravel) REPO_URL='https://github.com/Jawadaziz78/django-project.git' ;;
                                 vue)     REPO_URL='https://github.com/Jawadaziz78/vue-project.git' ;;
                                 nextjs)  REPO_URL='https://github.com/Jawadaziz78/nextjs-project.git' ;;
@@ -59,8 +59,48 @@ pipeline {
 
         stage('Test') {
             steps {
-                // Empty Stage as requested
-                echo '⚠️ Test Stage is currently empty.'
+                sshagent(['deploy-server-key']) {
+                    sh '''
+                        ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
+                            set -e
+                            echo '🧪 STAGE 2: TEST (Running Unit Tests)'
+                            cd ${BUILD_DIR}
+
+                            # Load Node 20
+                            export NVM_DIR=\\"\\$HOME/.nvm\\"
+                            [ -s \\"\\$NVM_DIR/nvm.sh\\" ] && . \\"\\$NVM_DIR/nvm.sh\\"
+                            nvm use 20
+
+                            case \\"${PROJECT_TYPE}\\" in
+                                laravel)
+                                    echo '⚙️ Testing Laravel...'
+
+                                    # 1. Copy the TESTING env file pointing to laravel_test DB
+                                    cp /home/ubuntu/projects/laravel/BookStack/.env.testing .env
+
+                                    # 2. Install dependencies (Required for testing)
+                                    composer install --no-interaction --prefer-dist --optimize-autoloader
+
+                                    # 3. Generate Key
+                                    php artisan key:generate
+
+                                    # 4. Run Tests
+                                    php artisan test
+                                    ;;
+
+                                vue)
+                                    echo 'Skipping Vue tests (not configured)'
+                                    ;;
+
+                                nextjs)
+                                    echo 'Skipping Next.js tests (not configured)'
+                                    ;;
+                            esac
+
+                            echo '✅ Tests Passed Successfully'
+                        "
+                    '''
+                }
             }
         }
 
@@ -73,7 +113,7 @@ pipeline {
                             
                             # 1. IDENTIFY LIVE DIRECTORY
                             case \\"${PROJECT_TYPE}\\" in
-                                laravel) LIVE_DIR='/home/ubuntu/projects/laravel/BookStack' ;; # FIXED PATH
+                                laravel) LIVE_DIR='/home/ubuntu/projects/laravel/BookStack' ;;
                                 vue)     LIVE_DIR='/home/ubuntu/projects/vue/app' ;;
                                 nextjs)  LIVE_DIR='/home/ubuntu/projects/nextjs/blog' ;;
                             esac
@@ -90,7 +130,7 @@ pipeline {
                             # 3. RUN POST-DEPLOY COMMANDS
                             cd \\$LIVE_DIR
 
-                            # Load Node 20 (Required for Vue/Next.js)
+                            # Load Node 20
                             export NVM_DIR=\\"\\$HOME/.nvm\\"
                             [ -s \\"\\$NVM_DIR/nvm.sh\\" ] && . \\"\\$NVM_DIR/nvm.sh\\"
                             nvm use 20
@@ -102,6 +142,9 @@ pipeline {
                                     php artisan config:clear
                                     php artisan cache:clear
                                     
+                                    # Re-install PROD dependencies
+                                    composer install --no-dev --no-interaction --prefer-dist
+                                    
                                     php artisan migrate --force
                                     php artisan config:cache
                                     php artisan route:cache
@@ -110,13 +153,13 @@ pipeline {
                                     ;;
                                 
                                 vue)
-                                    echo '⚙️ Building Vue (using existing node_modules)...'
+                                    echo '⚙️ Building Vue...'
                                     npm run build
                                     sudo systemctl reload nginx
                                     ;;
                                 
                                 nextjs)
-                                    echo '⚙️ Building Next.js (using existing node_modules)...'
+                                    echo '⚙️ Building Next.js...'
                                     cd web
                                     rm -rf .next
                                     npm run build
@@ -136,11 +179,9 @@ pipeline {
     post {
         success {
             echo '✅ Deployment SUCCESS (Slack Notification Skipped)'
-            // sh "curl -X POST -H 'Content-type: application/json' --data '{\"text\":\"✅ Jawad Deployment SUCCESS: ${env.JOB_NAME} (Build #${env.BUILD_NUMBER})\"}' ${env.SLACK_PART_A}${env.SLACK_PART_B}${env.SLACK_PART_C}"
         }
         failure {
             echo '❌ Deployment FAILED (Slack Notification Skipped)'
-            // sh "curl -X POST -H 'Content-type: application/json' --data '{\"text\":\"❌ Jawad Deployment FAILED: ${env.JOB_NAME} (Build #${env.BUILD_NUMBER})\"}' ${env.SLACK_PART_A}${env.SLACK_PART_B}${env.SLACK_PART_C}"
         }
     }
 }
