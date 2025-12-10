@@ -10,10 +10,10 @@ pipeline {
         DEPLOY_USER   = 'ubuntu'
         BUILD_DIR     = '/home/ubuntu/build-staging'
         
-        
-       // SLACK_PART_A  = 'https://hooks.slack.com/services/'
-       // SLACK_PART_B  = 'T01KC5SLA49/B0A284K2S6T/'
-       // SLACK_PART_C  = 'JRJsWNSYnh2tujdMo4ph0Tgp'
+        // Slack Config (Commented out for now)
+        // SLACK_PART_A  = 'https://hooks.slack.com/services/'
+        // SLACK_PART_B  = 'T01KC5SLA49/B0A284K2S6T/'
+        // SLACK_PART_C  = 'JRJsWNSYnh2tujdMo4ph0Tgp'
 
         // -----------------------------------------------------
         // CHANGE THIS PER REPO: 'laravel', 'vue', or 'nextjs'
@@ -135,10 +135,12 @@ pipeline {
 
     post {
         success {
-            sh "curl -X POST -H 'Content-type: application/json' --data '{\"text\":\"Jawad Deployment SUCCESS: ${env.JOB_NAME} (Build #${env.BUILD_NUMBER})\"}' ${SLACK_PART_A}${SLACK_PART_B}${SLACK_PART_C}"
+            echo '✅ Deployment SUCCESS (Slack Notification Skipped)'
+            // sh "curl -X POST -H 'Content-type: application/json' --data '{\"text\":\"✅ Jawad Deployment SUCCESS: ${env.JOB_NAME} (Build #${env.BUILD_NUMBER})\"}' ${env.SLACK_PART_A}${env.SLACK_PART_B}${env.SLACK_PART_C}"
         }
         failure {
-            sh "curl -X POST -H 'Content-type: application/json' --data '{\"text\":\"Jawad Deployment FAILED: ${env.JOB_NAME} (Build #${env.BUILD_NUMBER})\"}' ${SLACK_PART_A}${SLACK_PART_B}${SLACK_PART_C}"
+            echo '❌ Deployment FAILED (Slack Notification Skipped)'
+            // sh "curl -X POST -H 'Content-type: application/json' --data '{\"text\":\"❌ Jawad Deployment FAILED: ${env.JOB_NAME} (Build #${env.BUILD_NUMBER})\"}' ${env.SLACK_PART_A}${env.SLACK_PART_B}${env.SLACK_PART_C}"
         }
     }
 }
