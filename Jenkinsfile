@@ -6,13 +6,13 @@ pipeline {
     }
 
     environment {
-        DEPLOY_HOST = '172.31.77.148'
-        DEPLOY_USER = 'ubuntu'
-        BUILD_DIR   = '/home/ubuntu/build-staging'
-        LIVE_DIR    = '/home/ubuntu/projects/laravel/BookStack'
-        // Hardcoded main or use valid branch env var
+        DEPLOY_HOST   = '172.31.77.148'
+        DEPLOY_USER   = 'ubuntu'
+        BUILD_DIR     = '/home/ubuntu/build-staging'
+        LIVE_DIR      = '/home/ubuntu/projects/laravel/BookStack'
         TARGET_BRANCH = 'main' 
-        REPO_URL    = 'https://github.com/Jawadaziz78/django-project.git'
+        REPO_URL      = 'https://github.com/Jawadaziz78/django-project.git'
+        SLACK_URL     = 'https://hooks.slack.com/services/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'
     }
 
     stages {
@@ -48,7 +48,7 @@ pipeline {
                                 exit 1
                             fi
 
-                            # Rsync (Flattened to single line to avoid syntax errors)
+                            # Rsync
                             rsync -av --delete --exclude='.env' --exclude='.git' --exclude='storage' --exclude='public/storage' --exclude='node_modules' --exclude='vendor' --exclude='public/dist' ${BUILD_DIR}/ ${LIVE_DIR}/
                             
                             # Laravel Commands
@@ -65,6 +65,15 @@ pipeline {
                     '''
                 }
             }
+        }
+    }
+
+    post {
+        success {
+            sh "curl -X POST -H 'Content-type: application/json' --data '{\"text\":\"✅ Deployment SUCCESS: ${env.JOB_NAME} (Build #${env.BUILD_NUMBER})\"}' ${SLACK_URL}"
+        }
+        failure {
+            sh "curl -X POST -H 'Content-type: application/json' --data '{\"text\":\"❌ Deployment FAILED: ${env.JOB_NAME} (Build #${env.BUILD_NUMBER})\"}' ${SLACK_URL}"
         }
     }
 }
