@@ -30,22 +30,18 @@ pipeline {
                             set -e
                             
                             # 1. IDENTIFY REPO URL
-                            case \"${PROJECT_TYPE}\" in
+                            case \\"${PROJECT_TYPE}\\" in
                                 laravel) REPO_URL='https://github.com/Jawadaziz78/django-project.git' ;;
                                 vue)     REPO_URL='https://github.com/Jawadaziz78/vue-project.git' ;;
                                 nextjs)  REPO_URL='https://github.com/Jawadaziz78/nextjs-project.git' ;;
                                 *)       echo '❌ Error: Unknown Project Type'; exit 1 ;;
                             esac
 
-                            echo '-----------------------------------'
                             echo '🚀 STAGE 1: BUILD (Cloning Code)'
-                            echo '-----------------------------------'
-
-                            # 2. PREPARE STAGING DIRECTORY
+                            
+                            # Clean and Clone
                             sudo rm -rf ${BUILD_DIR}
                             mkdir -p ${BUILD_DIR}
-                            
-                            # 3. CLONE CODE
                             git clone \\$REPO_URL ${BUILD_DIR}
                             cd ${BUILD_DIR}
                             git checkout ${BRANCH_NAME:-main}
@@ -78,14 +74,14 @@ pipeline {
                                     # 1. Copy the TESTING env file pointing to laravel_test DB
                                     cp /home/ubuntu/projects/laravel/BookStack/.env.testing .env
 
-                                    # 2. Install dependencies (Required for testing)
+                                    # 2. OPTIMIZED: Use global composer to install dependencies in staging
                                     composer install --no-interaction --prefer-dist --optimize-autoloader
-
+                                    
                                     # 3. Generate Key
                                     php artisan key:generate
 
-                                    # 4. Run Tests
-                                    php artisan test
+                                    # 4. Run Tests (Use direct PHPUnit path)
+                                    ./vendor/bin/phpunit
                                     ;;
 
                                 vue)
@@ -118,19 +114,16 @@ pipeline {
                                 nextjs)  LIVE_DIR='/home/ubuntu/projects/nextjs/blog' ;;
                             esac
 
-                            echo '-----------------------------------'
-                            echo '🚀 STAGE 3: DEPLOY (Rsync & Config)'
-                            echo '📂 Target: '$LIVE_DIR
-                            echo '-----------------------------------'
+                            echo '🚀 STAGE 3: DEPLOY (Syncing to Live)'
 
-                            # 2. RSYNC TO LIVE (Preserve .env and vendor)
+                            # Ensure Live Directory Exists
                             mkdir -p \\$LIVE_DIR
+
+                            # Rsync to Live (Excluding sensitive files)
                             rsync -av --delete --exclude='.env' --exclude='.git' --exclude='storage' --exclude='public/storage' --exclude='node_modules' --exclude='vendor' --exclude='public/dist' ${BUILD_DIR}/ \\$LIVE_DIR/
 
-                            # 3. RUN POST-DEPLOY COMMANDS
+                            # Post-Deploy Commands
                             cd \\$LIVE_DIR
-
-                            # Load Node 20
                             export NVM_DIR=\\"\\$HOME/.nvm\\"
                             [ -s \\"\\$NVM_DIR/nvm.sh\\" ] && . \\"\\$NVM_DIR/nvm.sh\\"
                             nvm use 20
@@ -138,15 +131,13 @@ pipeline {
                             case \\"${PROJECT_TYPE}\\" in
                                 laravel)
                                     echo '⚙️ Running Laravel Tasks...'
-                                    # Clear cache to fix 'Access Denied' errors
-                                    php artisan config:clear
-                                    php artisan cache:clear
                                     
-                                    # Re-install PROD dependencies
+                                    # OPTIMIZED: Use global composer to install only PROD dependencies in live folder
                                     composer install --no-dev --no-interaction --prefer-dist
                                     
+                                    php artisan config:clear
+                                    php artisan cache:clear
                                     php artisan migrate --force
-                                    php artisan config:cache
                                     php artisan route:cache
                                     php artisan view:cache
                                     sudo systemctl reload nginx
