@@ -21,83 +21,32 @@ pipeline {
         SLACK_PART_C  = 'JRJsWNSYnh2tujdMo4ph0Tgp'
     }
 
-   stage('Build') {
-    steps {
-        sshagent(['deploy-server-key']) {
-            sh '''
-                ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
-                    set -e
+    stages {
+        stage('Build') {
+            steps {
+                sshagent(['deploy-server-key']) {
+                    sh '''
+                        ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
+                            set -e
 
-                    echo '-----------------------------------'
-                    echo '🚀 STAGE 1: BUILD (Checkout Code)'
-                    echo '-----------------------------------'
+                            echo '-----------------------------------'
+                            echo '🚀 STAGE 1: BUILD (Checkout Code)'
+                            echo '-----------------------------------'
 
-                    # Use Jenkins' built-in checkout mechanism to get the latest code for the branch
-                    checkout scm
+                            # Use Jenkins' built-in checkout mechanism to get the latest code for the branch
+                            checkout scm
 
-                    # After checkout, ensure we are on the correct branch (BRANCH_NAME set by Jenkins or defaults to 'main')
-                    git checkout ${BRANCH_NAME:-main}
+                            # After checkout, ensure we are on the correct branch (BRANCH_NAME set by Jenkins or defaults to 'main')
+                            git checkout ${BRANCH_NAME:-main}
 
-                    echo '✅ Build/Checkout Successful'
-                "
-            '''
+                            echo '✅ Build/Checkout Successful'
+                        "
+                    '''
+                }
+            }
         }
-    }
-}
 
-
-        // stage('Test') {
-        //     steps {
-        //         sshagent(['deploy-server-key']) {
-        //             sh '''
-        //                 ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
-        //                     set -e
-        //                     cd ${BUILD_DIR}
-        //                     echo '-----------------------------------'
-        //                     echo '🧪 STAGE 2: TEST EXECUTION'
-        //                     echo '-----------------------------------'
-                            
-        //                     # Load Node 20
-        //                     export NVM_DIR=\\"\\$HOME/.nvm\\" 
-        //                     [ -s \\"\\$NVM_DIR/nvm.sh\\" ] && . \\"\\$NVM_DIR/nvm.sh\\" 
-        //                     nvm use 20
-
-        //                     case \\"${PROJECT_TYPE}\\" in
-        //                         laravel)
-        //                            
-        //                             # Install dev dependencies (including PHPUnit)
-        //                             composer install --no-interaction --prefer-dist --optimize-autoloader
-
-        //                             
-        //                             export DB_CONNECTION=sqlite
-        //                             export DB_DATABASE=:memory:
-                             
-        //                             php ./vendor/bin/phpunit --testsuite Unit
-        //                             ;;
-                            
-        //                         vue)
-        //                             echo '--- Running Vue Tests (Jest/Vitest) ---'
-        //                             if [ ! -d \\"node_modules\\" ]; then npm install; fi
-        //                             npm run test:unit
-        //                             ;;
-                            
-        //                         nextjs)
-        //                             echo '--- Running Next.js Tests (Jest) ---'
-        //                             cd web
-        //                             if [ ! -d \\"node_modules\\" ]; then npm install; fi
-        //                             npm run test
-        //                             ;;
-        //                         *)
-        //                             echo '⚠️ Skipping tests for project type: ${PROJECT_TYPE}'
-        //                             ;;
-        //                     esac
-
-        //                     echo '✅ Tests Completed Successfully'
-        //                 "
-        //             '''
-        //         }
-        //     }
-        // }
+        // Test stage commented out for now
 
         stage('Deploy') {
             steps {
