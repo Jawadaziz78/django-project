@@ -26,12 +26,12 @@ pipeline {
                             set -e
                             
                             # -------------------------------------------------------
-                            # 1. SETUP VARIABLES (Correct Live Paths from your logs)
+                            # 1. SETUP VARIABLES
                             # -------------------------------------------------------
                             case \\"${PROJECT_TYPE}\\" in
                                 laravel)
-                                    # Based on your previous logs
-                                    LIVE_DIR='/home/ubuntu/projects/laravel'
+                                    # FIXED: Added /BookStack to match your working config
+                                    LIVE_DIR='/home/ubuntu/projects/laravel/BookStack'
                                     REPO_URL='https://github.com/Jawadaziz78/django-project.git'
                                     ;;
                                 vue)
@@ -53,32 +53,29 @@ pipeline {
                             echo '-----------------------------------'
 
                             # -------------------------------------------------------
-                            # 2. PREPARE STAGING (Clean Clone)
+                            # 2. PREPARE STAGING
                             # -------------------------------------------------------
-                            # Clean build directory
                             sudo rm -rf ${BUILD_DIR}
                             mkdir -p ${BUILD_DIR}
                             
-                            # Clone fresh code
                             git clone \\$REPO_URL ${BUILD_DIR}
                             cd ${BUILD_DIR}
                             git checkout ${BRANCH_NAME:-main}
 
                             # -------------------------------------------------------
-                            # 3. RSYNC TO LIVE (The Safe Deployment)
+                            # 3. RSYNC TO LIVE
                             # -------------------------------------------------------
-                            # Ensure live directory exists
                             mkdir -p \\$LIVE_DIR
 
-                            # Sync files BUT exclude config/vendor (keeps existing deps)
+                            # Exclude .env to protect your secrets
                             rsync -av --delete --exclude='.env' --exclude='.git' --exclude='storage' --exclude='public/storage' --exclude='node_modules' --exclude='vendor' --exclude='public/dist' ${BUILD_DIR}/ \\$LIVE_DIR/
 
                             # -------------------------------------------------------
-                            # 4. RUN POST-DEPLOY COMMANDS (Using existing Live Dependencies)
+                            # 4. RUN POST-DEPLOY COMMANDS
                             # -------------------------------------------------------
                             cd \\$LIVE_DIR
 
-                            # Load Node 20 (Required for Vue/Next.js)
+                            # Load Node 20
                             export NVM_DIR=\\"\\$HOME/.nvm\\"
                             [ -s \\"\\$NVM_DIR/nvm.sh\\" ] && . \\"\\$NVM_DIR/nvm.sh\\"
                             nvm use 20
@@ -86,7 +83,7 @@ pipeline {
                             case \\"${PROJECT_TYPE}\\" in
                                 laravel)
                                     echo '⚙️ Running Laravel Tasks...'
-                                    # Fixes the 'Access Denied' error by clearing bad config cache
+                                    # Clear cache to fix 'Access Denied' errors
                                     php artisan config:clear
                                     php artisan cache:clear
                                     
@@ -98,18 +95,15 @@ pipeline {
                                     ;;
                                 
                                 vue)
-                                    echo '⚙️ Building Vue (using existing node_modules)...'
+                                    echo '⚙️ Building Vue...'
                                     npm run build
                                     sudo systemctl reload nginx
                                     ;;
                                 
                                 nextjs)
-                                    echo '⚙️ Building Next.js (using existing node_modules)...'
+                                    echo '⚙️ Building Next.js...'
                                     cd web
-                                    
-                                    # Clean old build cache to prevent errors
                                     rm -rf .next
-                                    
                                     npm run build
                                     pm2 restart all
                                     sudo systemctl reload nginx
