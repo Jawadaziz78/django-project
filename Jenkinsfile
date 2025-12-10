@@ -76,15 +76,15 @@ pipeline {
 
                             case \\"${PROJECT_TYPE}\\" in
                                 laravel)
-                                    echo '--- Running Laravel Smoke Tests (Unit Only) ---'
+                                   
                                     # Install dev dependencies (including PHPUnit)
                                     composer install --no-interaction --prefer-dist --optimize-autoloader
 
-                                    # Use in-memory SQLite database for fast unit testing
+                                    
                                     export DB_CONNECTION=sqlite
                                     export DB_DATABASE=:memory:
                                     
-                                    # Use phpunit binary directly to run tests
+                                   
                                     php ./vendor/bin/phpunit --testsuite Unit
                                     ;;
                                 
