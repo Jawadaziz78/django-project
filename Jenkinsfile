@@ -43,14 +43,13 @@ pipeline {
                             echo '-----------------------------------'
 
                             # 2. PREPARE STAGING DIRECTORY
-                      //      sudo rm -rf ${BUILD_DIR}
-                      //     mkdir -p ${BUILD_DIR}
+                            sudo rm -rf ${BUILD_DIR}
+                            mkdir -p ${BUILD_DIR}
                             
                             # 3. CLONE CODE
-                       //     git clone \\$REPO_URL ${BUILD_DIR}
-                         //   cd ${BUILD_DIR}
+                            git clone \\$REPO_URL ${BUILD_DIR}
+                            cd ${BUILD_DIR}
                             # Use BRANCH_NAME provided by Jenkins, default to 'main' if not set
-                            // checkout scm
                             git checkout ${BRANCH_NAME:-main} 
                             
                             echo '✅ Build/Clone Successful'
