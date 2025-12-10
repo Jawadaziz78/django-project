@@ -9,7 +9,7 @@ pipeline {
         DEPLOY_HOST = '172.31.77.148'
         DEPLOY_USER = 'ubuntu'
         BUILD_DIR   = '/home/ubuntu/build-staging'
-        SLACK_URL   = 'https://hooks.slack.com/services/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'
+        SLACK_URL   = 'https://hooks.slack.com/services/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'
 
         // -----------------------------------------------------
         // CHANGE THIS PER REPO: 'laravel', 'vue', or 'nextjs'
