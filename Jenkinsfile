@@ -69,19 +69,25 @@ pipeline {
 
                             case \\"${PROJECT_TYPE}\\" in
                                 laravel)
-                                    echo '⚙️ Testing Laravel...'
+                                    echo '⚙️ Testing Laravel/BookStack...'
 
-                                    # 1. Copy the TESTING env file pointing to laravel_test DB
+                                    # 1. Copy the TESTING env file
                                     cp /home/ubuntu/projects/laravel/BookStack/.env.testing .env
 
-                                    # 2. OPTIMIZED: Use global composer to install dependencies in staging
+                                    # 2. Install dependencies
+                                    echo '📦 Installing dependencies...'
                                     composer install --no-interaction --prefer-dist --optimize-autoloader
                                     
-                                    # 3. Generate Key
+                                    # 3. Generate Application Key
                                     php artisan key:generate
 
-                                    # 4. Run Tests (Use direct PHPUnit path)
-                                    ./vendor/bin/phpunit
+                                    # 4. Run database migrations for testing
+                                    echo '🗄️ Running migrations for test database...'
+                                    php artisan migrate --database=mysql_testing --force -n
+
+                                    # 5. Run PHPUnit tests
+                                    echo '🧪 Running PHPUnit tests...'
+                                    php -d memory_limit=512M ./vendor/bin/phpunit --no-coverage
                                     ;;
 
                                 vue)
