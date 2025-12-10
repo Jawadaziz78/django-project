@@ -13,7 +13,7 @@ pipeline {
         // -----------------------------------------------------
         // CHANGE THIS PER REPO: 'laravel', 'vue', or 'nextjs'
         // -----------------------------------------------------
-        PROJECT_TYPE = 'laravel' // Set to 'laravel' to test this fix
+        PROJECT_TYPE = 'laravel' 
         
         // ❌ SLACK TEMPORARILY COMMENTED OUT
         // SLACK_PART_A  = 'https://hooks.slack.com/services/'
@@ -77,31 +77,27 @@ pipeline {
                             case \\"${PROJECT_TYPE}\\" in
                                 laravel)
                                     echo '--- Running Laravel Smoke Tests (Unit Only) ---'
-                                    # Dependencies must be installed for artisan/phpunit to work
-                                    composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
+                                    # Install dev dependencies (including PHPUnit)
+                                    composer install --no-interaction --prefer-dist --optimize-autoloader
 
                                     # Use in-memory SQLite database for fast unit testing
                                     export DB_CONNECTION=sqlite
                                     export DB_DATABASE=:memory:
                                     
-                                    # ✅ CORRECTED COMMAND: Use phpunit binary directly
+                                    # Use phpunit binary directly to run tests
                                     php ./vendor/bin/phpunit --testsuite Unit
                                     ;;
                                 
                                 vue)
                                     echo '--- Running Vue Tests (Jest/Vitest) ---'
-                                    # Install dependencies only if node_modules is missing
                                     if [ ! -d \\"node_modules\\" ]; then npm install; fi
-                                    
                                     npm run test:unit
                                     ;;
                                 
                                 nextjs)
                                     echo '--- Running Next.js Tests (Jest) ---'
                                     cd web
-                                    # Install dependencies only if node_modules is missing
                                     if [ ! -d \\"node_modules\\" ]; then npm install; fi
-
                                     npm run test
                                     ;;
                                 *)
@@ -184,13 +180,5 @@ pipeline {
         }
     }
 
-    // ❌ POST-ACTIONS ARE COMMENTED OUT
-    // post {
-    //     success {
-    //         sh "curl -X POST -H 'Content-type: application/json' --data '{\"text\":\"✅ Jawad Deployment SUCCESS: ${env.JOB_NAME} (Build #${env.BUILD_NUMBER})\"}' ${SLACK_PART_A}${SLACK_PART_B}${SLACK_PART_C}"
-    //     }
-    //     failure {
-    //         sh "curl -X POST -H 'Content-type: application/json' --data '{\"text\":\"❌ Jawad Deployment FAILED: ${env.JOB_NAME} (Build #${env.BUILD_NUMBER})\"}' ${SLACK_PART_A}${SLACK_PART_B}${SLACK_PART_C}"
-    //     }
-    // }
+    // post { ... } // Post actions are commented out
 }
