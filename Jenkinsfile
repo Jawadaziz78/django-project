@@ -29,12 +29,12 @@ pipeline {
                         cd ${BUILD_DIR}
                         
                         # FIX: Replaced 'git pull' with fetch + reset --hard
-                        # This prevents the 'divergent branches' error by forcing the server to match GitHub
+                        # This prevents the 'divergent branches' error.
                         git fetch origin ${BRANCH_NAME:-main}
                         git reset --hard origin/${BRANCH_NAME:-main}
                         git checkout ${BRANCH_NAME:-main} 
 
-                        case \"${PROJECT_TYPE}\" in
+                        case \\"${PROJECT_TYPE}\\" in
                             laravel)
                                 # FIX: Copy .env if missing so artisan commands don't fail
                                 if [ ! -f .env ]; then cp .env.example .env; fi
@@ -76,12 +76,12 @@ pipeline {
         //                 echo '-----------------------------------'
                         
         //                 # Load Node 20
-        //                 export NVM_DIR=\"\$HOME/.nvm\" 
-        //                 [ -s \"\$NVM_DIR/nvm.sh\" ] && . \"\$NVM_DIR/nvm.sh\" 
+        //                 export NVM_DIR=\\"\\$HOME/.nvm\\" 
+        //                 [ -s \\"\\$NVM_DIR/nvm.sh\\" ] && . \\"\\$NVM_DIR/nvm.sh\\" 
         //                 nvm use 20
 
         //                 # Execute tests based on PROJECT_TYPE
-        //                 case \"${PROJECT_TYPE}\" in
+        //                 case \\"${PROJECT_TYPE}\\" in
         //                     laravel)
         //                         # Setup in-memory SQLite for testing
         //                         export DB_CONNECTION=sqlite
@@ -137,14 +137,13 @@ pipeline {
                         # RUN POST-DEPLOY COMMANDS
                         cd ${LIVE_DIR}
 
-                        # FIX: Hardcoded path to /home/ubuntu/.nvm
-                        # This prevents Jenkins from injecting '/var/lib/jenkins' as HOME
-                        export NVM_DIR=\"/home/ubuntu/.nvm\" 
-                        [ -s \"\$NVM_DIR/nvm.sh\" ] && . \"\$NVM_DIR/nvm.sh\" 
+                        # Load Node 20 (Using hardcoded path to prevent variable expansion errors)
+                        export NVM_DIR='/home/ubuntu/.nvm'
+                        [ -s \\"\$NVM_DIR/nvm.sh\\" ] && . \\"\$NVM_DIR/nvm.sh\\" 
                         nvm use 20
 
                         # Run project-specific post-deploy tasks
-                        case \"${PROJECT_TYPE}\" in
+                        case \\"${PROJECT_TYPE}\\" in
                             laravel)
                                 echo '⚙️ Running Compulsory Laravel Tasks...'
                                 
