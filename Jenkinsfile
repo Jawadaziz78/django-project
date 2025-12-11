@@ -9,8 +9,7 @@ pipeline {
         DEPLOY_HOST     = '172.31.77.148'
         DEPLOY_USER     = 'ubuntu'
         BUILD_DIR       = '/home/ubuntu/build-staging'
-        
-        PROJECT_TYPE = 'laravel' 
+        PROJECT_TYPE    = 'laravel' 
         
         // SLACK CONFIGURATION (Commented Out)
         // SLACK_PART_A  = 'https://hooks.slack.com/services/'
@@ -31,10 +30,9 @@ pipeline {
                         git pull origin ${BRANCH_NAME:-main}
                         git checkout ${BRANCH_NAME:-main} 
 
-                        # Quotes are escaped with backslash so they are passed to the remote shell
                         case \\"${PROJECT_TYPE}\\" in
                             laravel)
-                                # FIX: Copy .env file if missing, required for artisan commands
+                                # FIX: Copy .env if missing so artisan commands don't fail
                                 if [ ! -f .env ]; then cp .env.example .env; fi
                                 
                                 echo '⚙️ Running Laravel Optimization Tasks...'
@@ -60,59 +58,57 @@ pipeline {
             }
         }
 
-
         // Stage 2: Test (Execute unit tests based on project type)
-    //     stage('Test') {
-      //       steps {
-         //        sshagent(['deploy-server-key']) {
-             //        sh '''
-               //      ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
-                //         set -e
-                  //       cd ${BUILD_DIR}
+        // stage('Test') {
+        //     steps {
+        //         sshagent(['deploy-server-key']) {
+        //             sh '''
+        //             ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
+        //                 set -e
+        //                 cd ${BUILD_DIR}
                         
-                     //    echo '-----------------------------------'
-                     //    echo '🧪 STAGE 2: TEST EXECUTION'
-                    //     echo '-----------------------------------'
+        //                 echo '-----------------------------------'
+        //                 echo '🧪 STAGE 2: TEST EXECUTION'
+        //                 echo '-----------------------------------'
                         
-                    //     # Load Node 20
-                    //     export NVM_DIR=\\"\\$HOME/.nvm\\" 
-                    //     [ -s \\"\\$NVM_DIR/nvm.sh\\" ] && . \\"\\$NVM_DIR/nvm.sh\\" 
-                    //     nvm use 20
+        //                 # Load Node 20
+        //                 export NVM_DIR=\\"\\$HOME/.nvm\\" 
+        //                 [ -s \\"\\$NVM_DIR/nvm.sh\\" ] && . \\"\\$NVM_DIR/nvm.sh\\" 
+        //                 nvm use 20
 
-                    //     # Execute tests based on PROJECT_TYPE
-                     //    case \\"${PROJECT_TYPE}\\" in
-                        //     laravel)
-                         //        # Setup in-memory SQLite for testing
-                           //      export DB_CONNECTION=sqlite
-                           //      export DB_DATABASE=:memory:
+        //                 # Execute tests based on PROJECT_TYPE
+        //                 case \\"${PROJECT_TYPE}\\" in
+        //                     laravel)
+        //                         # Setup in-memory SQLite for testing
+        //                         export DB_CONNECTION=sqlite
+        //                         export DB_DATABASE=:memory:
                                 
-                             //    php ./vendor/bin/phpunit --testsuite Unit
-                            //     ;;
+        //                         php ./vendor/bin/phpunit --testsuite Unit
+        //                         ;;
                             
-                        //     vue)
-                          //       npm run test:unit
-                           //      ;;
+        //                     vue)
+        //                         npm run test:unit
+        //                         ;;
                             
-                          //   nextjs)
-                           //      cd web
-                            //     npm run test
-                            //     ;;
-                          //   *)
-                              //   echo '⚠️ Skipping tests for project type: ${PROJECT_TYPE}'
-                              //   ;;
-                      //   esac
+        //                     nextjs)
+        //                         cd web
+        //                         npm run test
+        //                         ;;
+        //                     *)
+        //                         echo '⚠️ Skipping tests for project type: ${PROJECT_TYPE}'
+        //                         ;;
+        //                 esac
 
-                     //    echo '✅ Tests Completed Successfully'
-                 //    "
-                //     '''
-               //  }
-      //       }
-    //     }
+        //                 echo '✅ Tests Completed Successfully'
+        //             "
+        //             '''
+        //         }
+        //     }
+        // }
 
-        // Stage 3: Deploy (Syncs code to live directory and runs post-deploy tasks)
-      stage('Deploy') {
+        stage('Deploy') {
             steps {
-                // FIX: Define LIVE_DIR here in Groovy. This prevents the shell from making it empty.
+                // FIX: Define LIVE_DIR in Groovy to prevent 'mkdir missing operand' error
                 script {
                     def projectDirs = [
                         'laravel': '/home/ubuntu/projects/laravel/BookStack',
@@ -134,8 +130,9 @@ pipeline {
                         echo '-----------------------------------'
 
                         # RSYNC TO LIVE 
+                        # FIX: Exclude bootstrap/cache to prevent overwriting live config with build placeholder config
                         mkdir -p ${LIVE_DIR}
-                        rsync -av --delete --exclude='.env' --exclude='.git' --exclude='storage' --exclude='public/storage' --exclude='node_modules' --exclude='vendor' --exclude='public/dist' ${BUILD_DIR}/ ${LIVE_DIR}/
+                        rsync -av --delete --exclude='.env' --exclude='.git' --exclude='bootstrap/cache/*.php' --exclude='storage' --exclude='public/storage' --exclude='node_modules' --exclude='vendor' --exclude='public/dist' ${BUILD_DIR}/ ${LIVE_DIR}/
 
                         # RUN POST-DEPLOY COMMANDS
                         cd ${LIVE_DIR}
