@@ -110,32 +110,35 @@ pipeline {
     //     }
 
         // Stage 3: Deploy (Syncs code to live directory and runs post-deploy tasks)
-        stage('Deploy') {
+      stage('Deploy') {
             steps {
+                // FIX: Define LIVE_DIR here in Groovy. This prevents the shell from making it empty.
+                script {
+                    def projectDirs = [
+                        'laravel': '/home/ubuntu/projects/laravel/BookStack',
+                        'vue':     '/home/ubuntu/projects/vue/app',
+                        'nextjs':  '/home/ubuntu/projects/nextjs/blog'
+                    ]
+                    env.LIVE_DIR = projectDirs[env.PROJECT_TYPE]
+                }
+
                 sshagent(['deploy-server-key']) {
                     sh '''
+                    # We use ${LIVE_DIR} directly now because Jenkins injects it safely
                     ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
                         set -e
                         
-                        # IDENTIFY LIVE DIRECTORY
-                        case \\"${PROJECT_TYPE}\\" in
-                            laravel) LIVE_DIR='/home/ubuntu/projects/laravel/BookStack' ;;
-                            vue)     LIVE_DIR='/home/ubuntu/projects/vue/app' ;;
-                            nextjs)  LIVE_DIR='/home/ubuntu/projects/nextjs/blog' ;;
-                        esac
-
                         echo '-----------------------------------'
                         echo '🚀 STAGE 3: DEPLOY (Rsync & Final Tasks)'
-                        echo '📂 Target: '\$LIVE_DIR
+                        echo '📂 Target: ${LIVE_DIR}'
                         echo '-----------------------------------'
 
                         # RSYNC TO LIVE 
-                        # We use backslash before LIVE_DIR so the local shell does not expand it to empty
-                        mkdir -p \$LIVE_DIR
-                        rsync -av --delete --exclude='.env' --exclude='.git' --exclude='storage' --exclude='public/storage' --exclude='node_modules' --exclude='vendor' --exclude='public/dist' ${BUILD_DIR}/ \$LIVE_DIR/
+                        mkdir -p ${LIVE_DIR}
+                        rsync -av --delete --exclude='.env' --exclude='.git' --exclude='storage' --exclude='public/storage' --exclude='node_modules' --exclude='vendor' --exclude='public/dist' ${BUILD_DIR}/ ${LIVE_DIR}/
 
                         # RUN POST-DEPLOY COMMANDS
-                        cd \$LIVE_DIR
+                        cd ${LIVE_DIR}
 
                         # Load Node 20
                         export NVM_DIR=\\"\\$HOME/.nvm\\" 
