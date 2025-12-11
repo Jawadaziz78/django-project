@@ -27,7 +27,11 @@ pipeline {
                         set -e
 
                         cd ${BUILD_DIR}
-                        git pull origin ${BRANCH_NAME:-main}
+                        
+                        # FIX: Replaced 'git pull' with fetch + reset --hard
+                        # This forces the server to match GitHub exactly and prevents 'divergent branches'
+                        git fetch origin ${BRANCH_NAME:-main}
+                        git reset --hard origin/${BRANCH_NAME:-main}
                         git checkout ${BRANCH_NAME:-main} 
 
                         case \\"${PROJECT_TYPE}\\" in
