@@ -19,7 +19,7 @@ pipeline {
     }
 
     stages {
-        // Stage 1: Build (Updates code and runs minimal, project-specific optimization)
+        
         stage('Build') {
             steps {
                 sshagent(['deploy-server-key']) {
