@@ -31,10 +31,12 @@ pipeline {
                         git pull origin ${BRANCH_NAME:-main}
                         git checkout ${BRANCH_NAME:-main} 
 
-                        case \\"${PROJECT_TYPE}\\" in
+                        # FIX: Removed extra backslashes (\\) before quotes because we are using '''
+                        case "${PROJECT_TYPE}" in
                             laravel)
                                 # FIX: Copy .env file if missing, required for artisan commands
                                 if [ ! -f .env ]; then cp .env.example .env; fi
+
                                 echo '⚙️ Running Laravel Optimization Tasks...'
                                 php artisan key:generate --force
                                 php artisan config:cache
@@ -91,7 +93,8 @@ pipeline {
                           //       npm run test:unit
                            //      ;;
                             
-                          //   nextjs)<br>                           //      cd web
+                          //   nextjs)
+                           //      cd web
                             //     npm run test
                             //     ;;
                           //   *)
@@ -99,10 +102,12 @@ pipeline {
                               //   ;;
                       //   esac
 
-                     //    echo '✅ Tests Completed Successfully'<br>                 //    "<br>                //     '''
-               //  }<br>      //       }<br>    //     }<br>
-
-// --- (Removing this fixed the error, this line is now just a comment)
+                     //    echo '✅ Tests Completed Successfully'
+                 //    "
+                //     '''
+               //  }
+      //       }
+    //     }
 
         // Stage 3: Deploy (Syncs code to live directory and runs post-deploy tasks)
         stage('Deploy') {
@@ -113,44 +118,42 @@ pipeline {
                         set -e
                         
                         # IDENTIFY LIVE DIRECTORY
-                        case \\"${PROJECT_TYPE}\\" in
+                        # FIX: Removed extra backslashes (\\) before quotes
+                        case "${PROJECT_TYPE}" in
                             laravel) LIVE_DIR='/home/ubuntu/projects/laravel/BookStack' ;;
                             vue)     LIVE_DIR='/home/ubuntu/projects/vue/app' ;;
                             nextjs)  LIVE_DIR='/home/ubuntu/projects/nextjs/blog' ;;
                         esac
 
                         echo '-----------------------------------'
-                        echo '🚀 STAGE 3: DEPLOY (Rsync & Config)'
+                        echo '🚀 STAGE 3: DEPLOY (Rsync & Final Tasks)'
                         echo '📂 Target: '$LIVE_DIR
                         echo '-----------------------------------'
 
                         # RSYNC TO LIVE 
-                        mkdir -p \\$LIVE_DIR
-                        rsync -av --delete --exclude='.env' --exclude='.git' --exclude='storage' --exclude='public/storage' --exclude='node_modules' --exclude='vendor' --exclude='public/dist' ${BUILD_DIR}/ \\$LIVE_DIR/
+                        # FIX: Removed extra backslashes (\\) before LIVE_DIR variable
+                        mkdir -p $LIVE_DIR
+                        rsync -av --delete --exclude='.env' --exclude='.git' --exclude='storage' --exclude='public/storage' --exclude='node_modules' --exclude='vendor' --exclude='public/dist' ${BUILD_DIR}/ $LIVE_DIR/
 
                         # RUN POST-DEPLOY COMMANDS
-                        cd \\$LIVE_DIR
+                        cd $LIVE_DIR
 
                         # Load Node 20
-                        export NVM_DIR=\\"\\$HOME/.nvm\\" 
-                        [ -s \\"\\$NVM_DIR/nvm.sh\\" ] && . \\"\\$NVM_DIR/nvm.sh\\" 
+                        export NVM_DIR="\\$HOME/.nvm" 
+                        [ -s "\\$NVM_DIR/nvm.sh" ] && . "\\$NVM_DIR/nvm.sh" 
                         nvm use 20
 
                         # Run project-specific post-deploy tasks
-                        case \\"${PROJECT_TYPE}\\" in
+                        case "${PROJECT_TYPE}" in
                             laravel)
                                 echo '⚙️ Running Laravel Tasks...'
-                                php artisan config:clear
-                                php artisan cache:clear
                                 php artisan migrate --force
                                 php artisan config:cache
-                                php artisan route:cache
-                                php artisan view:cache
                                 sudo systemctl reload nginx
                                 ;;
                             
                             vue)
-                                echo '⚙️ Applying Vue build...'
+                                echo '⚙️ Applying Vue changes...'
                                 sudo systemctl reload nginx
                                 ;;
                             
