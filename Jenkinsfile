@@ -130,7 +130,7 @@ pipeline {
                         echo '-----------------------------------'
 
                         # RSYNC TO LIVE 
-                        # FIX: Exclude bootstrap/cache to prevent overwriting live config with build placeholder config
+                        # We exclude cache files so we don't copy the 'build' config to 'live'
                         mkdir -p ${LIVE_DIR}
                         rsync -av --delete --exclude='.env' --exclude='.git' --exclude='bootstrap/cache/*.php' --exclude='storage' --exclude='public/storage' --exclude='node_modules' --exclude='vendor' --exclude='public/dist' ${BUILD_DIR}/ ${LIVE_DIR}/
 
@@ -146,6 +146,11 @@ pipeline {
                         case \\"${PROJECT_TYPE}\\" in
                             laravel)
                                 echo '⚙️ Running Laravel Tasks...'
+                                
+                                # FIX: Force delete the poisoned config cache from previous failed runs
+                                # This ensures Laravel reads the real LIVE .env file
+                                rm -f bootstrap/cache/*.php
+                                
                                 php artisan migrate --force
                                 php artisan config:cache
                                 sudo systemctl reload nginx
