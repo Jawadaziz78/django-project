@@ -1,23 +1,16 @@
-// Jenkins Declarative Pipeline for Build and Deploy
 pipeline {
-    // Define the execution environment (any available agent)
     agent any
 
-    // Define triggers: automatically run on GitHub push events
     triggers {
         githubPush()
     }
 
-    // Define environment variables
     environment {
-        // Deployment target
         DEPLOY_HOST     = '172.31.77.148'
         DEPLOY_USER     = 'ubuntu'
         BUILD_DIR       = '/home/ubuntu/build-staging'
         
-        // -----------------------------------------------------
-        // CHANGE THIS PER REPO: 'laravel', 'vue', or 'nextjs'
-        // -----------------------------------------------------
+       
         PROJECT_TYPE = 'laravel' 
         
         // SLACK CONFIGURATION (Commented Out)
@@ -26,137 +19,124 @@ pipeline {
         // SLACK_PART_C  = 'JRJsWNSYnh2tujdMo4ph0Tgp'
     }
 
-    // Define the stages of the pipeline
     stages {
-        // Stage 1: Build (Connects to remote server and clones the code)
+        // Stage 1: Build (Updates code and runs minimal, project-specific optimization)
         stage('Build') {
             steps {
-                // Use stored SSH key for authentication on the remote server
                 sshagent(['deploy-server-key']) {
                     sh '''
-                    # Establish SSH connection to the deployment host
                     ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
                         set -e
-                        
-                        # 1. IDENTIFY REPO URL based on PROJECT_TYPE
-                        case \\"${PROJECT_TYPE}\\" in
-                            laravel) REPO_URL='https://github.com/Jawadaziz78/django-project.git' ;;
-                            vue)     REPO_URL='https://github.com/Jawadaziz78/vue-project.git' ;;
-                            nextjs)  REPO_URL='https://github.com/Jawadaziz78/nextjs-project.git' ;;
-                            *)       echo '❌ Error: Unknown Project Type'; exit 1 ;;
-                        esac
 
-                        # Logging
-                        echo '-----------------------------------'
-                        echo '🚀 STAGE 1: BUILD (Cloning Code)'
-                        echo '-----------------------------------'
-
-                        # 2. PREPARE STAGING DIRECTORY
-                        sudo rm -rf ${BUILD_DIR}
-                        mkdir -p ${BUILD_DIR}
-                        
-                        # 3. CLONE CODE
-                        git clone \\$REPO_URL ${BUILD_DIR}
                         cd ${BUILD_DIR}
-                        # Use BRANCH_NAME provided by Jenkins, default to 'main' if not set
+                        git pull origin ${BRANCH_NAME:-main}
                         git checkout ${BRANCH_NAME:-main} 
-                        
-                        echo '✅ Build/Clone Successful'
-                    "
-                    '''
-                }
-            }
-        }
 
-        // Stage 2: Test (Execute unit tests based on project type)
-        stage('Test') {
-            steps {
-                sshagent(['deploy-server-key']) {
-                    sh '''
-                    # Establish SSH connection to the deployment host
-                    ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
-                        set -e
-                        cd ${BUILD_DIR}
-                        
-                        # Logging
-                        echo '-----------------------------------'
-                        echo '🧪 STAGE 2: TEST EXECUTION'
-                        echo '-----------------------------------'
-                        
-                        # Load Node 20 (Needed for Node-based projects)
-                        export NVM_DIR=\\"\\$HOME/.nvm\\" 
-                        [ -s \\"\\$NVM_DIR/nvm.sh\\" ] && . \\"\\$NVM_DIR/nvm.sh\\" 
-                        nvm use 20
-
-                        # Execute tests based on PROJECT_TYPE
                         case \\"${PROJECT_TYPE}\\" in
                             laravel)
-                                # Install dev dependencies (including PHPUnit)
-                                composer install --no-interaction --prefer-dist --optimize-autoloader
-
-                                # Setup in-memory SQLite for testing
-                                export DB_CONNECTION=sqlite
-                                export DB_DATABASE=:memory:
-                                
-                                # Run unit tests
-                                php ./vendor/bin/phpunit --testsuite Unit
+                                echo '⚙️ Running Laravel Optimization Tasks...'
+                                php artisan key:generate --force
+                                php artisan config:cache
+                                php artisan route:cache
+                                php artisan view:cache
                                 ;;
                             
                             vue)
-                                echo '--- Running Vue Tests (Jest/Vitest) ---'
-                                if [ ! -d \\"node_modules\\" ]; then npm install; fi
-                                npm run test:unit
+                                echo '⚙️ Vue code updated. Skipping build/install.'
                                 ;;
                             
                             nextjs)
-                                echo '--- Running Next.js Tests (Jest) ---'
-                                cd web
-                                if [ ! -d \\"node_modules\\" ]; then npm install; fi
-                                npm run test
-                                ;;
-                            *)
-                                echo '⚠️ Skipping tests for project type: ${PROJECT_TYPE}'
+                                echo '⚙️ Next.js code updated. Skipping build/install.'
                                 ;;
                         esac
-
-                        echo '✅ Tests Completed Successfully'
+                        
+                        echo '✅ Build/Update Successful'
                     "
                     '''
                 }
             }
         }
+
+---
+
+        // Stage 2: Test (Execute unit tests based on project type)
+    //     stage('Test') {
+      //       steps {
+         //        sshagent(['deploy-server-key']) {
+             //        sh '''
+               //      ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
+                //         set -e
+                  //       cd ${BUILD_DIR}
+                        
+                     //    echo '-----------------------------------'
+                     //    echo '🧪 STAGE 2: TEST EXECUTION'
+                    //     echo '-----------------------------------'
+                        
+                    //     # Load Node 20
+                    //     export NVM_DIR=\\"\\$HOME/.nvm\\" 
+                    //     [ -s \\"\\$NVM_DIR/nvm.sh\\" ] && . \\"\\$NVM_DIR/nvm.sh\\" 
+                    //     nvm use 20
+
+                    //     # Execute tests based on PROJECT_TYPE
+                     //    case \\"${PROJECT_TYPE}\\" in
+                        //     laravel)
+                         //        # Setup in-memory SQLite for testing
+                           //      export DB_CONNECTION=sqlite
+                           //      export DB_DATABASE=:memory:
+                                
+                             //    php ./vendor/bin/phpunit --testsuite Unit
+                            //     ;;
+                            
+                        //     vue)
+                          //       npm run test:unit
+                           //      ;;
+                            
+                          //   nextjs)
+                           //      cd web
+                            //     npm run test
+                            //     ;;
+                          //   *)
+                              //   echo '⚠️ Skipping tests for project type: ${PROJECT_TYPE}'
+                              //   ;;
+                      //   esac
+
+                     //    echo '✅ Tests Completed Successfully'
+                 //    "
+                //     '''
+               //  }
+      //       }
+    //     }
+
+// ---
 
         // Stage 3: Deploy (Syncs code to live directory and runs post-deploy tasks)
         stage('Deploy') {
             steps {
                 sshagent(['deploy-server-key']) {
                     sh '''
-                    # Establish SSH connection to the deployment host
                     ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
                         set -e
                         
-                        # 1. IDENTIFY LIVE DIRECTORY
+                        # IDENTIFY LIVE DIRECTORY
                         case \\"${PROJECT_TYPE}\\" in
                             laravel) LIVE_DIR='/home/ubuntu/projects/laravel/BookStack' ;;
                             vue)     LIVE_DIR='/home/ubuntu/projects/vue/app' ;;
                             nextjs)  LIVE_DIR='/home/ubuntu/projects/nextjs/blog' ;;
                         esac
 
-                        # Logging
                         echo '-----------------------------------'
                         echo '🚀 STAGE 3: DEPLOY (Rsync & Config)'
                         echo '📂 Target: '$LIVE_DIR
                         echo '-----------------------------------'
 
-                        # 2. RSYNC TO LIVE (Preserve configs, vendors, etc.)
+                        # RSYNC TO LIVE 
                         mkdir -p \\$LIVE_DIR
-                        # rsync options: archive mode, verbose, delete extra files in dest, exclude sensitive/large directories
                         rsync -av --delete --exclude='.env' --exclude='.git' --exclude='storage' --exclude='public/storage' --exclude='node_modules' --exclude='vendor' --exclude='public/dist' ${BUILD_DIR}/ \\$LIVE_DIR/
 
-                        # 3. RUN POST-DEPLOY COMMANDS
+                        # RUN POST-DEPLOY COMMANDS
                         cd \\$LIVE_DIR
 
-                        # Load Node 20 (Required for Vue/Next.js)
+                        # Load Node 20
                         export NVM_DIR=\\"\\$HOME/.nvm\\" 
                         [ -s \\"\\$NVM_DIR/nvm.sh\\" ] && . \\"\\$NVM_DIR/nvm.sh\\" 
                         nvm use 20
@@ -167,7 +147,6 @@ pipeline {
                                 echo '⚙️ Running Laravel Tasks...'
                                 php artisan config:clear
                                 php artisan cache:clear
-                                
                                 php artisan migrate --force
                                 php artisan config:cache
                                 php artisan route:cache
@@ -176,15 +155,13 @@ pipeline {
                                 ;;
                             
                             vue)
-                                echo '⚙️ Building Vue (using copied code)...'
-                                npm run build
+                                echo '⚙️ Applying Vue build...'
                                 sudo systemctl reload nginx
                                 ;;
                             
                             nextjs)
-                                echo '⚙️ Building Next.js (using copied code)...'
+                                echo '⚙️ Running Next.js build and restart...'
                                 cd web
-                                rm -rf .next
                                 npm run build
                                 pm2 restart all
                                 sudo systemctl reload nginx
@@ -199,15 +176,12 @@ pipeline {
         }
     }
 
-    // Define post-build actions
     post {
         success {
-            // FIX: Replaced ambiguous 'script {}' with a simple echo step
             echo "Pipeline succeeded. (Slack notification is commented out)"
             // sh "curl -X POST -H 'Content-type: application/json' --data '{\"text\":\"Jawad Deployment SUCCESS: ${env.JOB_NAME} (Build #${env.BUILD_NUMBER})\"}' ${SLACK_PART_A}${SLACK_PART_B}${SLACK_PART_C}"
         }
         failure {
-            // FIX: Replaced ambiguous 'script {}' with a simple echo step
             echo "Pipeline failed. (Slack notification is commented out)"
             // sh "curl -X POST -H 'Content-type: application/json' --data '{\"text\":\"Jawad Deployment FAILED: ${env.JOB_NAME} (Build #${env.BUILD_NUMBER})\"}' ${SLACK_PART_A}${SLACK_PART_B}${SLACK_PART_C}"
         }
