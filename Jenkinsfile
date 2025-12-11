@@ -33,6 +33,8 @@ pipeline {
 
                         case \\"${PROJECT_TYPE}\\" in
                             laravel)
+                                # FIX: Copy .env file if missing, required for artisan commands
+                                if [ ! -f .env ]; then cp .env.example .env; fi
                                 echo '⚙️ Running Laravel Optimization Tasks...'
                                 php artisan key:generate --force
                                 php artisan config:cache
