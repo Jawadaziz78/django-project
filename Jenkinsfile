@@ -10,7 +10,6 @@ pipeline {
         DEPLOY_USER     = 'ubuntu'
         BUILD_DIR       = '/home/ubuntu/build-staging'
         
-       
         PROJECT_TYPE = 'laravel' 
         
         // SLACK CONFIGURATION (Commented Out)
@@ -57,7 +56,6 @@ pipeline {
             }
         }
 
-// ---
 
         // Stage 2: Test (Execute unit tests based on project type)
     //     stage('Test') {
@@ -91,8 +89,7 @@ pipeline {
                           //       npm run test:unit
                            //      ;;
                             
-                          //   nextjs)
-                           //      cd web
+                          //   nextjs)<br>                           //      cd web
                             //     npm run test
                             //     ;;
                           //   *)
@@ -100,14 +97,10 @@ pipeline {
                               //   ;;
                       //   esac
 
-                     //    echo '✅ Tests Completed Successfully'
-                 //    "
-                //     '''
-               //  }
-      //       }
-    //     }
+                     //    echo '✅ Tests Completed Successfully'<br>                 //    "<br>                //     '''
+               //  }<br>      //       }<br>    //     }<br>
 
-// ---
+// --- (Removing this fixed the error, this line is now just a comment)
 
         // Stage 3: Deploy (Syncs code to live directory and runs post-deploy tasks)
         stage('Deploy') {
