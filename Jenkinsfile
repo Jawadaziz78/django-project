@@ -28,7 +28,7 @@ pipeline {
 
                         cd ${BUILD_DIR}
                         
-                        # FIX APPLIED HERE: Replaced 'git pull' with fetch + reset --hard
+                        # FIX: Replaced 'git pull' with fetch + reset --hard
                         # This prevents the 'divergent branches' error by forcing the server to match GitHub
                         git fetch origin ${BRANCH_NAME:-main}
                         git reset --hard origin/${BRANCH_NAME:-main}
@@ -137,8 +137,9 @@ pipeline {
                         # RUN POST-DEPLOY COMMANDS
                         cd ${LIVE_DIR}
 
-                        # Load Node 20
-                        export NVM_DIR=\"\$HOME/.nvm\" 
+                        # FIX: Hardcoded path to /home/ubuntu/.nvm
+                        # This prevents Jenkins from injecting '/var/lib/jenkins' as HOME
+                        export NVM_DIR=\"/home/ubuntu/.nvm\" 
                         [ -s \"\$NVM_DIR/nvm.sh\" ] && . \"\$NVM_DIR/nvm.sh\" 
                         nvm use 20
 
