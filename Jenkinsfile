@@ -62,6 +62,54 @@ pipeline {
             }
         }
 
+        // Stage 2: Test (Execute unit tests based on project type)
+        // stage('Test') {
+        //     steps {
+        //         sshagent(['deploy-server-key']) {
+        //             sh '''
+        //             ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
+        //                 set -e
+        //                 cd ${BUILD_DIR}
+        //                 
+        //                 echo '-----------------------------------'
+        //                 echo '🧪 STAGE 2: TEST EXECUTION'
+        //                 echo '-----------------------------------'
+        //                 
+        //                 # Load Node 20
+        //                 export NVM_DIR=\\"\\$HOME/.nvm\\" 
+        //                 [ -s \\"\\$NVM_DIR/nvm.sh\\" ] && . \\"\\$NVM_DIR/nvm.sh\\" 
+        //                 nvm use 20
+        //
+        //                 # Execute tests based on PROJECT_TYPE
+        //                 case \\"${PROJECT_TYPE}\\" in
+        //                     laravel)
+        //                         # Setup in-memory SQLite for testing
+        //                         export DB_CONNECTION=sqlite
+        //                         export DB_DATABASE=:memory:
+        //                         
+        //                         php ./vendor/bin/phpunit --testsuite Unit
+        //                         ;;
+        //                     
+        //                     vue)
+        //                         npm run test:unit
+        //                         ;;
+        //                     
+        //                     nextjs)
+        //                         cd web
+        //                         npm run test
+        //                         ;;
+        //                     *)
+        //                         echo '⚠️ Skipping tests for project type: ${PROJECT_TYPE}'
+        //                         ;;
+        //                 esac
+        //
+        //                 echo '✅ Tests Completed Successfully'
+        //             "
+        //             '''
+        //         }
+        //     }
+        // }
+
         stage('Deploy') {
             steps {
                 // FIX: Define LIVE_DIR in Groovy to prevent 'mkdir missing operand' error
