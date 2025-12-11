@@ -90,7 +90,8 @@ pipeline {
                         cd ${LIVE_DIR}
 
                         # Load Node 20
-                        # FIX: Hardcoded path to ensure NVM loads correctly even if variable expansion fails
+                        # FIX: Hardcoded path based on your diagnostic result
+                        # This ensures the script loads successfully every time
                         export NVM_DIR='/home/ubuntu/.nvm'
                         [ -s \"/home/ubuntu/.nvm/nvm.sh\" ] && . \"/home/ubuntu/.nvm/nvm.sh\"
                         nvm use 20
