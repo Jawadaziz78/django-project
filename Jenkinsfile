@@ -1,22 +1,20 @@
 pipeline {
     agent any
-
     triggers {
         githubPush()
     }
-
     environment {
         DEPLOY_HOST     = '172.31.77.148'
         DEPLOY_USER     = 'ubuntu'
         BUILD_DIR       = '/home/ubuntu/build-staging'
-        PROJECT_TYPE    = 'laravel' 
+        
+        PROJECT_TYPE = 'laravel' 
         
         // SLACK CONFIGURATION (Commented Out)
         // SLACK_PART_A  = 'https://hooks.slack.com/services/'
         // SLACK_PART_B  = 'T01KC5SLA49/B0A284K2S6T/'
         // SLACK_PART_C  = 'JRJsWNSYnh2tujdMo4ph0Tgp'
     }
-
     stages {
         
         stage('Build') {
@@ -25,21 +23,14 @@ pipeline {
                     sh '''
                     ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
                         set -e
-
                         cd ${BUILD_DIR}
-                        
-                        # FIX: Replaced 'git pull' with fetch + reset --hard
-                        # This prevents the 'divergent branches' error.
-                        git fetch origin ${BRANCH_NAME:-main}
-                        git reset --hard origin/${BRANCH_NAME:-main}
+                        git pull origin ${BRANCH_NAME:-main}
                         git checkout ${BRANCH_NAME:-main} 
-
                         case \\"${PROJECT_TYPE}\\" in
                             laravel)
-                                # FIX: Copy .env if missing so artisan commands don't fail
+                                # FIX: Copy .env file if missing, required for artisan commands
                                 if [ ! -f .env ]; then cp .env.example .env; fi
-                                
-                                echo 'Running Laravel Optimization Tasks...'
+                                echo '⚙️ Running Laravel Optimization Tasks...'
                                 php artisan key:generate --force
                                 php artisan config:cache
                                 php artisan route:cache
@@ -61,112 +52,94 @@ pipeline {
                 }
             }
         }
-
         // Stage 2: Test (Execute unit tests based on project type)
-        // stage('Test') {
-        //     steps {
-        //         sshagent(['deploy-server-key']) {
-        //             sh '''
-        //             ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
-        //                 set -e
-        //                 cd ${BUILD_DIR}
+    //     stage('Test') {
+      //       steps {
+         //        sshagent(['deploy-server-key']) {
+             //        sh '''
+               //      ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
+                //         set -e
+                  //       cd ${BUILD_DIR}
                         
-        //                 echo '-----------------------------------'
-        //                 echo '🧪 STAGE 2: TEST EXECUTION'
-        //                 echo '-----------------------------------'
+                     //    echo '-----------------------------------'
+                     //    echo '🧪 STAGE 2: TEST EXECUTION'
+                    //     echo '-----------------------------------'
                         
-        //                 # Load Node 20
-        //                 export NVM_DIR=\\"\\$HOME/.nvm\\" 
-        //                 [ -s \\"\\$NVM_DIR/nvm.sh\\" ] && . \\"\\$NVM_DIR/nvm.sh\\" 
-        //                 nvm use 20
-
-        //                 # Execute tests based on PROJECT_TYPE
-        //                 case \\"${PROJECT_TYPE}\\" in
-        //                     laravel)
-        //                         # Setup in-memory SQLite for testing
-        //                         export DB_CONNECTION=sqlite
-        //                         export DB_DATABASE=:memory:
+                    //     # Load Node 20
+                    //     export NVM_DIR=\\"\\$HOME/.nvm\\" 
+                    //     [ -s \\"\\$NVM_DIR/nvm.sh\\" ] && . \\"\\$NVM_DIR/nvm.sh\\" 
+                    //     nvm use 20
+                    //     # Execute tests based on PROJECT_TYPE
+                     //    case \\"${PROJECT_TYPE}\\" in
+                        //     laravel)
+                         //        # Setup in-memory SQLite for testing
+                           //      export DB_CONNECTION=sqlite
+                           //      export DB_DATABASE=:memory:
                                 
-        //                         php ./vendor/bin/phpunit --testsuite Unit
-        //                         ;;
+                             //    php ./vendor/bin/phpunit --testsuite Unit
+                            //     ;;
                             
-        //                     vue)
-        //                         npm run test:unit
-        //                         ;;
+                        //     vue)
+                          //       npm run test:unit
+                           //      ;;
                             
-        //                     nextjs)
-        //                         cd web
-        //                         npm run test
-        //                         ;;
-        //                     *)
-        //                         echo '⚠️ Skipping tests for project type: ${PROJECT_TYPE}'
-        //                         ;;
-        //                 esac
-
-        //                 echo '✅ Tests Completed Successfully'
-        //             "
-        //             '''
-        //         }
-        //     }
-        // }
-
+                          //   nextjs)<br>                           //      cd web
+                            //     npm run test
+                            //     ;;
+                          //   *)
+                              //   echo '⚠️ Skipping tests for project type: ${PROJECT_TYPE}'
+                              //   ;;
+                      //   esac
+                     //    echo '✅ Tests Completed Successfully'<br>                 //    "<br>                //     '''
+               //  }<br>      //       }<br>    //     }<br>
+// --- (Removing this fixed the error, this line is now just a comment)
+        // Stage 3: Deploy (Syncs code to live directory and runs post-deploy tasks)
         stage('Deploy') {
             steps {
-                // FIX: Define LIVE_DIR in Groovy to prevent 'mkdir missing operand' error
-                script {
-                    def projectDirs = [
-                        'laravel': '/home/ubuntu/projects/laravel/BookStack',
-                        'vue':     '/home/ubuntu/projects/vue/app',
-                        'nextjs':  '/home/ubuntu/projects/nextjs/blog'
-                    ]
-                    env.LIVE_DIR = projectDirs[env.PROJECT_TYPE]
-                }
-
                 sshagent(['deploy-server-key']) {
                     sh '''
-                    # We use ${LIVE_DIR} directly now because Jenkins injects it safely
                     ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
                         set -e
                         
-
+                        # IDENTIFY LIVE DIRECTORY
+                        case \\"${PROJECT_TYPE}\\" in
+                            laravel) LIVE_DIR='/home/ubuntu/projects/laravel/BookStack' ;;
+                            vue)     LIVE_DIR='/home/ubuntu/projects/vue/app' ;;
+                            nextjs)  LIVE_DIR='/home/ubuntu/projects/nextjs/blog' ;;
+                        esac
+                        echo '-----------------------------------'
+                        echo '🚀 STAGE 3: DEPLOY (Rsync & Config)'
+                        echo '📂 Target: '$LIVE_DIR
+                        echo '-----------------------------------'
                         # RSYNC TO LIVE 
-                        # We exclude cache files so we don't copy the 'build' config to 'live'
-                        mkdir -p ${LIVE_DIR}
-                        rsync -av --delete --exclude='.env' --exclude='.git' --exclude='bootstrap/cache/*.php' --exclude='storage' --exclude='public/storage' --exclude='node_modules' --exclude='vendor' --exclude='public/dist' ${BUILD_DIR}/ ${LIVE_DIR}/
-
+                        mkdir -p \\$LIVE_DIR
+                        rsync -av --delete --exclude='.env' --exclude='.git' --exclude='storage' --exclude='public/storage' --exclude='node_modules' --exclude='vendor' --exclude='public/dist' ${BUILD_DIR}/ \\$LIVE_DIR/
                         # RUN POST-DEPLOY COMMANDS
-                        cd ${LIVE_DIR}
-
-                        # Load Node 20 (Using hardcoded path to prevent variable expansion errors)
-                        export NVM_DIR='/home/ubuntu/.nvm'
-                        [ -s \\"\$NVM_DIR/nvm.sh\\" ] && . \\"\$NVM_DIR/nvm.sh\\" 
+                        cd \\$LIVE_DIR
+                        # Load Node 20
+                        export NVM_DIR=\\"\\$HOME/.nvm\\" 
+                        [ -s \\"\\$NVM_DIR/nvm.sh\\" ] && . \\"\\$NVM_DIR/nvm.sh\\" 
                         nvm use 20
-
                         # Run project-specific post-deploy tasks
                         case \\"${PROJECT_TYPE}\\" in
                             laravel)
-                                echo '⚙️ Running Compulsory Laravel Tasks...'
-                                
-                                # 1. Force delete poisoned config cache (Critical Fix)
-                                rm -f bootstrap/cache/*.php
-                                
-                                # 2. Update Database 
+                                echo '⚙️ Running Laravel Tasks...'
+                                php artisan config:clear
+                                php artisan cache:clear
                                 php artisan migrate --force
-                                
-                                # 3. Refresh Config Cache
                                 php artisan config:cache
-                                
-                                # 4. Reload Server 
+                                php artisan route:cache
+                                php artisan view:cache
                                 sudo systemctl reload nginx
                                 ;;
                             
                             vue)
-                                echo 'Reloading Vue...'
+                                echo '⚙️ Applying Vue build...'
                                 sudo systemctl reload nginx
                                 ;;
                             
                             nextjs)
-                                echo 'Rebuilding Next.js...'
+                                echo '⚙️ Running Next.js build and restart...'
                                 cd web
                                 npm run build
                                 pm2 restart all
@@ -181,7 +154,6 @@ pipeline {
             }
         }
     }
-
     post {
         success {
             echo "Pipeline succeeded. (Slack notification is commented out)"
@@ -193,3 +165,26 @@ pipeline {
         }
     }
 }
+Collapse
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
