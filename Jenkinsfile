@@ -1,3 +1,4 @@
+
 pipeline {
     agent any
 
@@ -29,7 +30,7 @@ pipeline {
                         cd ${BUILD_DIR}
                         
                         # FIX: Replaced 'git pull' with fetch + reset --hard
-                        # This forces the server to match GitHub exactly and prevents 'divergent branches'
+                        # This prevents the 'divergent branches' error.
                         git fetch origin ${BRANCH_NAME:-main}
                         git reset --hard origin/${BRANCH_NAME:-main}
                         git checkout ${BRANCH_NAME:-main} 
@@ -62,54 +63,6 @@ pipeline {
             }
         }
 
-        // Stage 2: Test (Execute unit tests based on project type)
-        // stage('Test') {
-        //     steps {
-        //         sshagent(['deploy-server-key']) {
-        //             sh '''
-        //             ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
-        //                 set -e
-        //                 cd ${BUILD_DIR}
-                        
-        //                 echo '-----------------------------------'
-        //                 echo '🧪 STAGE 2: TEST EXECUTION'
-        //                 echo '-----------------------------------'
-                        
-        //                 # Load Node 20
-        //                 export NVM_DIR=\\"\\$HOME/.nvm\\" 
-        //                 [ -s \\"\\$NVM_DIR/nvm.sh\\" ] && . \\"\\$NVM_DIR/nvm.sh\\" 
-        //                 nvm use 20
-
-        //                 # Execute tests based on PROJECT_TYPE
-        //                 case \\"${PROJECT_TYPE}\\" in
-        //                     laravel)
-        //                         # Setup in-memory SQLite for testing
-        //                         export DB_CONNECTION=sqlite
-        //                         export DB_DATABASE=:memory:
-                                
-        //                         php ./vendor/bin/phpunit --testsuite Unit
-        //                         ;;
-                            
-        //                     vue)
-        //                         npm run test:unit
-        //                         ;;
-                            
-        //                     nextjs)
-        //                         cd web
-        //                         npm run test
-        //                         ;;
-        //                     *)
-        //                         echo '⚠️ Skipping tests for project type: ${PROJECT_TYPE}'
-        //                         ;;
-        //                 esac
-
-        //                 echo '✅ Tests Completed Successfully'
-        //             "
-        //             '''
-        //         }
-        //     }
-        // }
-
         stage('Deploy') {
             steps {
                 // FIX: Define LIVE_DIR in Groovy to prevent 'mkdir missing operand' error
@@ -138,8 +91,10 @@ pipeline {
                         cd ${LIVE_DIR}
 
                         # Load Node 20
-                        export NVM_DIR=\\"\\$HOME/.nvm\\" 
-                        [ -s \\"\\$NVM_DIR/nvm.sh\\" ] && . \\"\\$NVM_DIR/nvm.sh\\" 
+                        # FIX: Hardcoded path based on your diagnostic result
+                        # This ensures the script loads successfully every time
+                        export NVM_DIR='/home/ubuntu/.nvm'
+                        [ -s \"/home/ubuntu/.nvm/nvm.sh\" ] && . \"/home/ubuntu/.nvm/nvm.sh\"
                         nvm use 20
 
                         # Run project-specific post-deploy tasks
