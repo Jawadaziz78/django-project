@@ -35,7 +35,7 @@ pipeline {
                                 # FIX: Copy .env if missing so artisan commands don't fail
                                 if [ ! -f .env ]; then cp .env.example .env; fi
                                 
-                                echo '⚙️ Running Laravel Optimization Tasks...'
+                                echo 'Running Laravel Optimization Tasks...'
                                 php artisan key:generate --force
                                 php artisan config:cache
                                 php artisan route:cache
@@ -124,10 +124,6 @@ pipeline {
                     ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
                         set -e
                         
-                        echo '-----------------------------------'
-                        echo '🚀 STAGE 3: DEPLOY (Rsync & Final Tasks)'
-                        echo '📂 Target: ${LIVE_DIR}'
-                        echo '-----------------------------------'
 
                         # RSYNC TO LIVE 
                         # We exclude cache files so we don't copy the 'build' config to 'live'
@@ -145,24 +141,28 @@ pipeline {
                         # Run project-specific post-deploy tasks
                         case \\"${PROJECT_TYPE}\\" in
                             laravel)
-                                echo '⚙️ Running Laravel Tasks...'
+                                echo '⚙️ Running Compulsory Laravel Tasks...'
                                 
-                                # FIX: Force delete the poisoned config cache from previous failed runs
-                                # This ensures Laravel reads the real LIVE .env file
+                                # 1. Force delete poisoned config cache (Critical Fix)
                                 rm -f bootstrap/cache/*.php
                                 
+                                # 2. Update Database 
                                 php artisan migrate --force
+                                
+                                # 3. Refresh Config Cache
                                 php artisan config:cache
+                                
+                                # 4. Reload Server 
                                 sudo systemctl reload nginx
                                 ;;
                             
                             vue)
-                                echo '⚙️ Applying Vue changes...'
+                                echo 'Reloading Vue...'
                                 sudo systemctl reload nginx
                                 ;;
                             
                             nextjs)
-                                echo '⚙️ Running Next.js build and restart...'
+                                echo 'Rebuilding Next.js...'
                                 cd web
                                 npm run build
                                 pm2 restart all
