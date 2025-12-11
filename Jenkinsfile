@@ -68,7 +68,7 @@ pipeline {
             }
         }
 
-        // Stage 2: Test (Uncommented, but still uses case logic for project types)
+        // Stage 2: Test (Execute unit tests based on project type)
         stage('Test') {
             steps {
                 sshagent(['deploy-server-key']) {
@@ -202,16 +202,14 @@ pipeline {
     // Define post-build actions
     post {
         success {
-            // FIX: Added a script block with a comment to satisfy the Groovy parser
-            script {
-                // sh "curl -X POST -H 'Content-type: application/json' --data '{\"text\":\"Jawad Deployment SUCCESS: ${env.JOB_NAME} (Build #${env.BUILD_NUMBER})\"}' ${SLACK_PART_A}${SLACK_PART_B}${SLACK_PART_C}"
-            }
+            // FIX: Replaced ambiguous 'script {}' with a simple echo step
+            echo "Pipeline succeeded. (Slack notification is commented out)"
+            // sh "curl -X POST -H 'Content-type: application/json' --data '{\"text\":\"Jawad Deployment SUCCESS: ${env.JOB_NAME} (Build #${env.BUILD_NUMBER})\"}' ${SLACK_PART_A}${SLACK_PART_B}${SLACK_PART_C}"
         }
         failure {
-            // FIX: Added a script block with a comment to satisfy the Groovy parser
-            script {
-                // sh "curl -X POST -H 'Content-type: application/json' --data '{\"text\":\"Jawad Deployment FAILED: ${env.JOB_NAME} (Build #${env.BUILD_NUMBER})\"}' ${SLACK_PART_A}${SLACK_PART_B}${SLACK_PART_C}"
-            }
+            // FIX: Replaced ambiguous 'script {}' with a simple echo step
+            echo "Pipeline failed. (Slack notification is commented out)"
+            // sh "curl -X POST -H 'Content-type: application/json' --data '{\"text\":\"Jawad Deployment FAILED: ${env.JOB_NAME} (Build #${env.BUILD_NUMBER})\"}' ${SLACK_PART_A}${SLACK_PART_B}${SLACK_PART_C}"
         }
     }
 }
