@@ -1,122 +1,50 @@
 pipeline {
     agent any
-
-    triggers {
-        githubPush()
-    }
-
+    triggers { githubPush() }
+    
     environment {
-        DEPLOY_HOST = '172.31.77.148'
-        DEPLOY_USER = 'ubuntu'
-        BUILD_DIR   = '/home/ubuntu/build-staging'
-        SLACK_URL   = 'https://hooks.slack.com/services/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'
-
-        // -----------------------------------------------------
-        // CHANGE THIS PER REPO: 'laravel', 'vue', or 'nextjs'
-        // -----------------------------------------------------
-        PROJECT_TYPE = 'laravel'
+        PROJECT_TYPE  = 'laravel' 
+        DEPLOY_HOST   = '172.31.77.148'
+        DEPLOY_USER   = 'ubuntu'
+        // SLACK_WEBHOOK = credentials('slack-webhook-url')
     }
 
     stages {
-        stage('Deploy') {
+        stage('Build and Deploy') {
             steps {
+                script {
+                    if (env.PROJECT_TYPE == 'vue') {
+                        env.LIVE_DIR = "/var/www/html/${env.BRANCH_NAME}/vue-project"
+                    } 
+                    else if (env.PROJECT_TYPE == 'laravel') {
+                        env.LIVE_DIR = "/var/www/html/${env.BRANCH_NAME}/django-project"
+                    } 
+                    else {
+                        env.LIVE_DIR = "/var/www/html/${env.BRANCH_NAME}/nextjs-project/web"
+                    }
+
+                    env.PM2_APP = "${env.PROJECT_TYPE}-${env.BRANCH_NAME}"
+                }
+
                 sshagent(['deploy-server-key']) {
                     sh '''
                         ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
                             set -e
+                            cd ${LIVE_DIR}
                             
-                            # -------------------------------------------------------
-                            # 1. SETUP VARIABLES (Correct Live Paths from your logs)
-                            # -------------------------------------------------------
-                            case \\"${PROJECT_TYPE}\\" in
-                                laravel)
-                                    # Based on your previous logs
-                                    LIVE_DIR='/home/ubuntu/projects/laravel'
-                                    REPO_URL='https://github.com/Jawadaziz78/django-project.git'
-                                    ;;
-                                vue)
-                                    LIVE_DIR='/home/ubuntu/projects/vue/app'
-                                    REPO_URL='https://github.com/Jawadaziz78/vue-project.git'
-                                    ;;
-                                nextjs)
-                                    LIVE_DIR='/home/ubuntu/projects/nextjs/blog'
-                                    REPO_URL='https://github.com/Jawadaziz78/nextjs-project.git'
-                                    ;;
-                                *)
-                                    echo '❌ Error: Unknown Project Type'; exit 1 ;;
-                            esac
+                            git pull origin ${BRANCH_NAME}
 
-                            echo '-----------------------------------'
-                            echo '🚀 DEPLOYING: ${PROJECT_TYPE}'
-                            echo '📂 Staging: ${BUILD_DIR}'
-                            echo '📂 Live: '$LIVE_DIR
-                            echo '-----------------------------------'
-
-                            # -------------------------------------------------------
-                            # 2. PREPARE STAGING (Clean Clone)
-                            # -------------------------------------------------------
-                            # Clean build directory
-                            sudo rm -rf ${BUILD_DIR}
-                            mkdir -p ${BUILD_DIR}
+                            export NVM_DIR=\"\$HOME/.nvm\"
+                            [ -s \"\$NVM_DIR/nvm.sh\" ] && . \"\$NVM_DIR/nvm.sh\"
                             
-                            # Clone fresh code
-                            git clone \\$REPO_URL ${BUILD_DIR}
-                            cd ${BUILD_DIR}
-                            git checkout ${BRANCH_NAME:-main}
-
-                            # -------------------------------------------------------
-                            # 3. RSYNC TO LIVE (The Safe Deployment)
-                            # -------------------------------------------------------
-                            # Ensure live directory exists
-                            mkdir -p \\$LIVE_DIR
-
-                            # Sync files BUT exclude config/vendor (keeps existing deps)
-                            rsync -av --delete --exclude='.env' --exclude='.git' --exclude='storage' --exclude='public/storage' --exclude='node_modules' --exclude='vendor' --exclude='public/dist' ${BUILD_DIR}/ \\$LIVE_DIR/
-
-                            # -------------------------------------------------------
-                            # 4. RUN POST-DEPLOY COMMANDS (Using existing Live Dependencies)
-                            # -------------------------------------------------------
-                            cd \\$LIVE_DIR
-
-                            # Load Node 20 (Required for Vue/Next.js)
-                            export NVM_DIR=\\"\\$HOME/.nvm\\"
-                            [ -s \\"\\$NVM_DIR/nvm.sh\\" ] && . \\"\\$NVM_DIR/nvm.sh\\"
-                            nvm use 20
-
-                            case \\"${PROJECT_TYPE}\\" in
-                                laravel)
-                                    echo '⚙️ Running Laravel Tasks...'
-                                    # Fixes the 'Access Denied' error by clearing bad config cache
-                                    php artisan config:clear
-                                    php artisan cache:clear
-                                    
-                                    php artisan migrate --force
-                                    php artisan config:cache
-                                    php artisan route:cache
-                                    php artisan view:cache
-                                    sudo systemctl reload nginx
-                                    ;;
-                                
-                                vue)
-                                    echo '⚙️ Building Vue (using existing node_modules)...'
-                                    npm run build
-                                    sudo systemctl reload nginx
-                                    ;;
-                                
-                                nextjs)
-                                    echo '⚙️ Building Next.js (using existing node_modules)...'
-                                    cd web
-                                    
-                                    # Clean old build cache to prevent errors
-                                    rm -rf .next
-                                    
-                                    npm run build
-                                    pm2 restart all
-                                    sudo systemctl reload nginx
-                                    ;;
-                            esac
-                            
-                            echo '✅ DEPLOYMENT SUCCESSFUL'
+                            if [ \"${PROJECT_TYPE}\" = \"vue\" ]; then
+                                npm run build
+                            elif [ \"${PROJECT_TYPE}\" = \"nextjs\" ]; then
+                                npm run build
+                                pm2 restart ${PM2_APP}
+                            elif [ \"${PROJECT_TYPE}\" = \"laravel\" ]; then
+                                sudo php artisan optimize
+                            fi
                         "
                     '''
                 }
@@ -126,10 +54,26 @@ pipeline {
 
     post {
         success {
-            sh "curl -X POST -H 'Content-type: application/json' --data '{\"text\":\"✅ Deployment SUCCESS: ${env.JOB_NAME} (Build #${env.BUILD_NUMBER})\"}' ${SLACK_URL}"
+            script {
+                echo "✅ Deployment Successful"
+                
+                // sh """
+                //     curl -X POST -H 'Content-type: application/json' \
+                //     --data '{"text":"✅ *Deployment Successful for ${PROJECT_TYPE}*\\nBranch: ${env.BRANCH_NAME}"}' \
+                //     ${SLACK_WEBHOOK}
+                // """
+            }
         }
         failure {
-            sh "curl -X POST -H 'Content-type: application/json' --data '{\"text\":\"❌ Deployment FAILED: ${env.JOB_NAME} (Build #${env.BUILD_NUMBER})\"}' ${SLACK_URL}"
+            script {
+                echo "❌ Deployment Failed"
+
+                // sh """
+                //     curl -X POST -H 'Content-type: application/json' \
+                //     --data '{"text":"❌ *Deployment Failed for ${PROJECT_TYPE}*\\nBranch: ${env.BRANCH_NAME}"}' \
+                //     ${SLACK_WEBHOOK}
+                // """
+            }
         }
     }
 }
