@@ -19,7 +19,7 @@ pipeline {
                     
                     withSonarQubeEnv('sonar-server') {
                         sh '''
-                            export SONAR_NODE_ARGS='--max-old-space-size=512'      
+                            export SONAR_NODE_ARGS='--max-old-space-size=2048'      
                             /home/ubuntu/sonar-scanner/bin/sonar-scanner \
                                 -Dsonar.projectKey=${PROJECT_TYPE}-project \
                                 -Dsonar.sources=.
