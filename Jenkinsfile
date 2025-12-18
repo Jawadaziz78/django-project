@@ -34,7 +34,7 @@ pipeline {
             steps {
                 script {
                     env.CURRENT_STAGE = 'Quality Gate'
-                    timeout(time: 2, unit: 'MINUTES') {
+                    timeout(time: 3, unit: 'MINUTES') {
                         env.QUALITY_GATE_STATUS = waitForQualityGate(abortPipeline: true).status
                     }
                 }
