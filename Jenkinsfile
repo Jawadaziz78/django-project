@@ -23,7 +23,7 @@ pipeline {
                             /home/ubuntu/sonar-scanner/bin/sonar-scanner \
                                 -Dsonar.projectKey=${PROJECT_TYPE}-project \
                                 -Dsonar.sources=.
-                                -Dsonar.exclusions=**/*.js,**/*.ts,**/*.css,**/*.scss,node_modules/**,vendor/**,public/**,tests/**,resources/lang/**,resources/views/**,storage/**,bootstrap/cache/**
+                                -Dsonar.exclusions=**/*.js,**/*.ts,**/*.vue,**/*.css,**/*.scss,**/*.json,node_modules/**,vendor/**,public/**,tests/**,resources/lang/**,resources/views/**,storage/**,bootstrap/cache/**
                         '''
                     }
                 }
