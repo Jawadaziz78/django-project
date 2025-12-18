@@ -8,7 +8,7 @@ pipeline {
         DEPLOY_USER   = 'ubuntu'
         CURRENT_STAGE = 'Initialization' 
         
-        // SLACK_WEBHOOK = credentials('slack-webhook-url')
+        SLACK_WEBHOOK = credentials('slack-webhook-url')
     }
     
     stages {
@@ -81,27 +81,21 @@ pipeline {
         success {
             script {
                 echo "✅ Pipeline Successful"
-                // Success Notification (Commented Out)
-                /*
                 sh """
                     curl -X POST -H 'Content-type: application/json' \
                     --data '{"text":"✅ *Deployment Successful*\\n📂 Project: ${PROJECT_TYPE}\\n🌿 Branch: ${env.BRANCH_NAME}\\n🚀 Status: Live"}' \
-                   // ${SLACK_WEBHOOK}
+                   ${SLACK_WEBHOOK}
                 """
-                */
             }
         }
         failure {
             script {
                 echo "❌ Pipeline Failed"
-                // Failure Notification (Commented Out)
-                /*
                 sh """
                     curl -X POST -H 'Content-type: application/json' \
                     --data '{"text":"❌ *Pipeline Failed*\\n📂 Project: ${PROJECT_TYPE}\\n🌿 Branch: ${env.BRANCH_NAME}\\n💥 Failed Stage: *${env.CURRENT_STAGE}*\\n🔍 Action: Check Jenkins Console Logs."}' \
-                   // ${SLACK_WEBHOOK}
+                   ${SLACK_WEBHOOK}
                 """
-                */
             }
         }
     }
