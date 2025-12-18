@@ -25,6 +25,10 @@ pipeline {
                                 -Dsonar.sources=.
                                 -Dsonar.inclusions=**/*.php \
                                 -Dsonar.exclusions=vendor/**,storage/**,resources/views/**,tests/**,bootstrap/cache/**,public/**
+                                -Dsonar.language=php \
+                                -Dsonar.js.analyze=false \
+                                -Dsonar.ts.analyze=false \
+                                -Dsonar.css.analyze=false
                         '''
                     }
                 }
