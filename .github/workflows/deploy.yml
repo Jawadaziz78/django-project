@@ -24,12 +24,12 @@ jobs:
             BRANCH=${{ github.ref_name }}
             
             # 1. INITIALIZATION
-            echo "STAGE_NAME=Initialization"
+            echo "Initialization" > /tmp/deploy_stage
             cd /var/www/html/$BRANCH/$PROJECT_TYPE-project
             git pull origin $BRANCH
 
             # 2. SONARQUBE ANALYSIS
-            echo "STAGE_NAME=SonarQube Analysis"
+            echo "SonarQube Analysis" > /tmp/deploy_stage
             export SONAR_NODE_ARGS='--max-old-space-size=512'
             /home/ubuntu/sonar-scanner/bin/sonar-scanner \
               -Dsonar.projectKey=${PROJECT_TYPE}-project \
@@ -40,7 +40,7 @@ jobs:
             echo "✅ SonarQube Analysis: DONE"
 
             # 3. QUALITY GATE
-            echo "STAGE_NAME=Quality Gate"
+            echo "Quality Gate" > /tmp/deploy_stage
             sleep 10
             for i in {1..24}; do
               STATUS=$(curl -s -u ${{ secrets.SONAR_TOKEN }}: "${{ secrets.SONAR_HOST_URL }}/api/qualitygates/project_status?projectKey=${PROJECT_TYPE}-project" | jq -r '.projectStatus.status')
@@ -56,7 +56,7 @@ jobs:
             fi
 
             # 5. BUILD AND DEPLOY
-            echo "STAGE_NAME=Build and Deploy"
+            echo "Build and Deploy" > /tmp/deploy_stage
             case "$PROJECT_TYPE" in
                 vue) 
                   VITE_BASE_URL="/$PROJECT_TYPE/$BRANCH/" 
@@ -75,13 +75,22 @@ jobs:
 
       - name: Slack Notification
         if: always()
-        env:
-          WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
         run: |
-          if [ "${{ steps.deploy_step.outcome }}" == "success" ]; then
-            TEXT="✅ *Deployment Successful*\n📂 Project: ${{ env.PROJECT_TYPE }}\n🌿 Branch: ${{ github.ref_name }}\n🚀 Status: Live"
-          else
-            FAILED_STAGE=$(echo "${{ steps.deploy_step.outputs.stdout }}" | grep "STAGE_NAME=" | tail -1 | cut -d'=' -f2)
-            TEXT="❌ *Pipeline Failed*\n📂 Project: ${{ env.PROJECT_TYPE }}\n🌿 Branch: ${{ github.ref_name }}\n💥 *Failed Stage:* ${FAILED_STAGE:-Execute Pipeline}\n🔍 <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|Check Logs>"
+          # 1. Default (Success) Settings
+          HEADER="✅ *Deployment Successful*"
+          EXTRA_INFO="\n🚀 Status: Live"
+
+          # 2. Dynamic Override on Failure
+          if [ "${{ steps.deploy_step.outcome }}" != "success" ]; then
+            # Setup key, fetch stage, cleanup
+            echo "${{ secrets.SSH_PRIVATE_KEY }}" > key && chmod 600 key
+            STAGE=$(ssh -o StrictHostKeyChecking=no -i key ${{ secrets.REMOTE_USER }}@${{ secrets.REMOTE_HOST }} "cat /tmp/deploy_stage" || echo "Unknown")
+            rm -f key
+
+            HEADER="❌ *Pipeline Failed*"
+            EXTRA_INFO="\n💥 *Failed Stage:* $STAGE"
           fi
-          curl -X POST -H 'Content-type: application/json' --data "{\"text\":\"$TEXT\"}" "$WEBHOOK_URL"
+
+          # 3. Build & Send Payload
+          TEXT="$HEADER\n📂 Project: ${{ env.PROJECT_TYPE }}\n🌿 Branch: ${{ github.ref_name }}$EXTRA_INFO"
+          curl -s -X POST -H 'Content-type: application/json' --data "{\"text\":\"$TEXT\"}" "${{ secrets.SLACK_WEBHOOK }}"
