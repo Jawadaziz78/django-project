@@ -37,6 +37,7 @@ jobs:
               -Dsonar.login=${{ secrets.SONAR_TOKEN }}
 
             # 3. QUALITY GATE CHECK
+            sleep 10
             for i in {1..24}; do
               STATUS=$(curl -s -u ${{ secrets.SONAR_TOKEN }}: "${{ secrets.SONAR_HOST_URL }}/api/qualitygates/project_status?projectKey=${PROJECT_TYPE}-project" | jq -r '.projectStatus.status')
               if [ "$STATUS" = "OK" ] || [ "$STATUS" = "ERROR" ]; then break; fi
@@ -46,7 +47,8 @@ jobs:
             if [ "$STATUS" != "OK" ]; then 
               exit 1 
             fi
-
+            sleep 5
+            
             # 4. PROJECT SPECIFIC BUILD
             case "$PROJECT_TYPE" in
                 vue) 
