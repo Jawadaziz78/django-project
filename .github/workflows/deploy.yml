@@ -73,15 +73,24 @@ jobs:
             esac
             echo "--- 🎉 Success ---"
 
+      # ========================================================================
+      # SLACK NOTIFICATION (Link Removed)
+      # ========================================================================
       - name: Slack Notification
         if: always()
         env:
+          # This maps your Repository Secret to the runner's environment
           WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
         run: |
           if [ "${{ steps.deploy_step.outcome }}" == "success" ]; then
             TEXT="✅ *Deployment Successful*\n📂 Project: ${{ env.PROJECT_TYPE }}\n🌿 Branch: ${{ github.ref_name }}\n🚀 Status: Live"
           else
+            # Extract the Failed Stage Name
             FAILED_STAGE=$(echo "${{ steps.deploy_step.outputs.stdout }}" | grep "STAGE_NAME=" | tail -1 | cut -d'=' -f2)
-            TEXT="❌ *Pipeline Failed*\n📂 Project: ${{ env.PROJECT_TYPE }}\n🌿 Branch: ${{ github.ref_name }}\n💥 *Failed Stage:* ${FAILED_STAGE:-Execute Pipeline}\n🔍 <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|Check Logs>"
+            
+            # Message without the "Check Logs" link
+            TEXT="❌ *Pipeline Failed*\n📂 Project: ${{ env.PROJECT_TYPE }}\n🌿 Branch: ${{ github.ref_name }}\n💥 *Failed Stage:* ${FAILED_STAGE:-Execute Pipeline}"
           fi
+          
+          # Send the request using the mapped secret
           curl -X POST -H 'Content-type: application/json' --data "{\"text\":\"$TEXT\"}" "$WEBHOOK_URL"
