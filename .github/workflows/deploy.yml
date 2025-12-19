@@ -4,6 +4,10 @@ on:
   push:
     branches: [ "development", "stage", "test" ]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   PROJECT_TYPE: 'laravel'
 
@@ -36,9 +40,11 @@ jobs:
               -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} \
               -Dsonar.login=${{ secrets.SONAR_TOKEN }}
 
+            # 3. QUALITY GATE CHECK
             for i in {1..24}; do
               STATUS=$(curl -s -u ${{ secrets.SONAR_TOKEN }}: "${{ secrets.SONAR_HOST_URL }}/api/qualitygates/project_status?projectKey=${PROJECT_TYPE}-project" | jq -r '.projectStatus.status')
               if [ "$STATUS" = "OK" ] || [ "$STATUS" = "ERROR" ]; then break; fi
+              sleep 2
             done
 
             if [ "$STATUS" != "OK" ]; then 
