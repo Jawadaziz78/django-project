@@ -79,18 +79,21 @@ jobs:
             esac
             echo "✅ Build and Deploy: DONE"
             echo "--- 🎉 Pipeline Execution Finished Successfully ---"
-
       # ========================================================================
-      # BUILT-IN SLACK NOTIFICATION (Using outcome and log parsing)
+      # BUILT-IN SLACK NOTIFICATION (Fixed URL and Logic)
       # ========================================================================
       - name: Slack Notification
         if: always()
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
         run: |
           if [ "${{ steps.deploy_step.outcome }}" == "success" ]; then
             TEXT="✅ *Deployment Successful*\n📂 *Project:* ${{ env.PROJECT_TYPE }}\n🌿 *Branch:* ${{ github.ref_name }}\n🚀 *Status:* Live"
           else
-            # Built-in identification logic: Get the last "STAGE_NAME" printed in logs
+            # Extract the last stage name from the logs
             FAILED_STAGE=$(echo "${{ steps.deploy_step.outputs.stdout }}" | grep "STAGE_NAME=" | tail -1 | cut -d'=' -f2)
             TEXT="❌ *Pipeline Failed*\n📂 *Project:* ${{ env.PROJECT_TYPE }}\n🌿 *Branch:* ${{ github.ref_name }}\n💥 *Failed Stage:* ${FAILED_STAGE:-Execute Pipeline}\n🔍 <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|Check Logs>"
           fi
-          curl -X POST -H 'Content-type: application/json' --data "{\"text\":\"$TEXT\"}" ${{ secrets.SLACK_WEBHOOK }}
+          
+          # Use the env variable for the curl command
+          curl -X POST -H 'Content-type: application/json' --data "{\"text\":\"$TEXT\"}" "$SLACK_WEBHOOK"
