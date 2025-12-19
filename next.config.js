@@ -1,7 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  basePath: '/nextjs',
-  assetPrefix: '/nextjs',
+  basePath: process.env.BASE_URL || '',
+  assetPrefix: process.env.BASE_URL || '',
+  reactStrictMode: true,
 };
 
 module.exports = nextConfig;
