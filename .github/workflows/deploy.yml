@@ -5,23 +5,22 @@ on:
 env:
   PROJECT_TYPE: "laravel"
   BRANCH: ${{ github.ref_name }}
+  REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
+  REMOTE_USER: ${{ secrets.REMOTE_USER }}
+  SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-
-
-      # 1) SONAR + QUALITY GATE (runs only on test branch)
+    
+      # 1) SONAR + QUALITY GATE (runs on all branches, checks test branch)
       - name: SonarQube Analysis + Quality Gate
         id: sonar
         if: env.BRANCH == 'test'
         run: |
             set -e
-            BRANCH="${{ github.ref_name }}"
-            cd "/var/www/html/$BRANCH/$PROJECT_TYPE-project"
+            ssh -i "$SSH_PRIVATE_KEY" "$REMOTE_USER@$REMOTE_HOST" << 'EOF'
             git pull origin "$BRANCH"
-
-
             export SONAR_NODE_ARGS='--max-old-space-size=512'
             /home/ubuntu/sonar-scanner/bin/sonar-scanner \
               -Dsonar.projectKey="${PROJECT_TYPE}-project" \
@@ -32,31 +31,29 @@ jobs:
             sleep 10
             STATUS="PENDING"
 
-
+            
             for i in {1..24}; do
               STATUS=$(curl -s -u "${{ secrets.SONAR_TOKEN }}:" "${{ secrets.SONAR_HOST_URL }}/api/qualitygates/project_status?projectKey=${PROJECT_TYPE}-project" | jq -r '.projectStatus.status')
               if [ "$STATUS" = "OK" ] || [ "$STATUS" = "ERROR" ]; then break; fi
               sleep 2
             done
+            
             if [ "$STATUS" != "OK" ]; then
               echo "Quality Gate failed (STATUS=$STATUS)"
               exit 1
             fi
+            EOF
 
-
+            
       # 2) BUILD + DEPLOY (runs only if test branch passes sonarqube analysis)
       - name: Build and Deploy
         id: deploy
         if: env.BRANCH == 'test' && steps.sonar.outcome == 'success'
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.REMOTE_HOST }}
-          username: ${{ secrets.REMOTE_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: PROJECT_TYPE
-          script: |
+        run: |
             set -e
-            # PROJECT SPECIFIC BUILD / DEPLOY
+            ssh -i "$SSH_PRIVATE_KEY" "$REMOTE_USER@$REMOTE_HOST" << 'EOF'
+            BRANCH="$BRANCH"
+            PROJECT_TYPE="$PROJECT_TYPE"
             case "$PROJECT_TYPE" in
               vue)
                 VITE_BASE_URL="/$PROJECT_TYPE/$BRANCH/"
@@ -71,8 +68,9 @@ jobs:
                 sudo php artisan optimize
                 ;;
             esac
+            EOF
 
-
+            
       # - name: Notify
       #   if: always()
       #   run: |
