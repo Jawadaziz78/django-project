@@ -3,83 +3,73 @@ on:
   push:
     branches: [ "development", "stage", "test" ]
 env:
-  PROJECT_TYPE: "laravel"
-  BRANCH: ${{ github.ref_name }}
-  REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
-  REMOTE_USER: ${{ secrets.REMOTE_USER }}
-  SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+  PROJECT_TYPE: 'laravel'
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-    
-      # 1) SONAR + QUALITY GATE (runs on all branches, checks test branch)
-      - name: SonarQube Analysis + Quality Gate
+      - name: Deployment
         id: sonar
-        if: env.BRANCH == 'test'
-        run: |
+        if: github.ref_name == 'test'
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.REMOTE_HOST }}
+          username: ${{ secrets.REMOTE_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: PROJECT_TYPE
+          script: |
             set -e
-            ssh -i "$SSH_PRIVATE_KEY" "$REMOTE_USER@$REMOTE_HOST" << 'EOF'
-            git pull origin "$BRANCH"
-            export SONAR_NODE_ARGS='--max-old-space-size=512'
-            /home/ubuntu/sonar-scanner/bin/sonar-scanner \
-              -Dsonar.projectKey="${PROJECT_TYPE}-project" \
-              -Dsonar.sources=app \
-              -Dsonar.inclusions=**/*.php \
-              -Dsonar.host.url="${{ secrets.SONAR_HOST_URL }}" \
-              -Dsonar.login="${{ secrets.SONAR_TOKEN }}"
-            sleep 10
-            STATUS="PENDING"
+            BRANCH=${{ github.ref_name }}
+            
+            # 1. INITIALIZATION
+            cd /var/www/html/$BRANCH/$PROJECT_TYPE-project
+            git pull origin $BRANCH
 
             
+            # 2. SONARQUBE ANALYSIS
+            export SONAR_NODE_ARGS='--max-old-space-size=512'
+            /home/ubuntu/sonar-scanner/bin/sonar-scanner \
+              -Dsonar.projectKey=${PROJECT_TYPE}-project \
+              -Dsonar.sources=app \
+              -Dsonar.inclusions=**/*.php \
+              -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} \
+              -Dsonar.login=${{ secrets.SONAR_TOKEN }}
+              
+            # 3. QUALITY GATE CHECK
             for i in {1..24}; do
-              STATUS=$(curl -s -u "${{ secrets.SONAR_TOKEN }}:" "${{ secrets.SONAR_HOST_URL }}/api/qualitygates/project_status?projectKey=${PROJECT_TYPE}-project" | jq -r '.projectStatus.status')
+              STATUS=$(curl -s -u ${{ secrets.SONAR_TOKEN }}: "${{ secrets.SONAR_HOST_URL }}/api/qualitygates/project_status?projectKey=${PROJECT_TYPE}-project" | jq -r '.projectStatus.status')
               if [ "$STATUS" = "OK" ] || [ "$STATUS" = "ERROR" ]; then break; fi
               sleep 2
             done
             
-            if [ "$STATUS" != "OK" ]; then
-              echo "Quality Gate failed (STATUS=$STATUS)"
-              exit 1
+            if [ "$STATUS" != "OK" ]; then 
+              exit 1 
             fi
-            EOF
-
             
-      # 2) BUILD + DEPLOY (runs only if test branch passes sonarqube analysis)
-      - name: Build and Deploy
-        id: deploy
-        if: env.BRANCH == 'test' && steps.sonar.outcome == 'success'
-        run: |
-            set -e
-            ssh -i "$SSH_PRIVATE_KEY" "$REMOTE_USER@$REMOTE_HOST" << 'EOF'
-            BRANCH="$BRANCH"
-            PROJECT_TYPE="$PROJECT_TYPE"
+            # 4. PROJECT SPECIFIC BUILD
             case "$PROJECT_TYPE" in
-              vue)
-                VITE_BASE_URL="/$PROJECT_TYPE/$BRANCH/"
-                export VITE_BASE_URL
-                npm run build
-                ;;
-              nextjs)
-                npm run build
-                pm2 restart "$PROJECT_TYPE-$BRANCH"
-                ;;
-              laravel)
-                sudo php artisan optimize
-                ;;
+                vue) 
+                  VITE_BASE_URL="/$PROJECT_TYPE/$BRANCH/" 
+                  npm run build 
+                  ;;
+                nextjs) 
+                  npm run build 
+                  pm2 restart $PROJECT_TYPE-$BRANCH 
+                  ;;
+                laravel) 
+                  sudo php artisan optimize
+                  ;;
             esac
-            EOF
-
             
       # - name: Notify
       #   if: always()
       #   run: |
       #     STATUS="${{ job.status == 'success' && 'SUCCESS' || 'FAILED' }}"
       #     if [[ "${{ job.status }}" == "success" ]]; then
-      #       MSG="Deployment successful!"
+      #       MSG="Deployment successful! "
       #     else
       #       [[ "${{ steps.sonar.outcome }}" == "failure" ]] && ERR="Quality Gate" || ERR="Build/Deploy"
-      #       MSG="Failed at: $ERR step"
+      #       MSG="Failed at: $ERR step "
       #     fi
       #     curl -X POST -H 'Content-type: application/json' \
       #     --data "{\"text\":\"*[$STATUS]* \n*Project:* ${{ env.PROJECT_TYPE }} \n*Branch:* ${{ github.ref_name }} \n*Status:* $MSG\"}" \
