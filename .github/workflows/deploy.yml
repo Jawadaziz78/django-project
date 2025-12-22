@@ -21,38 +21,43 @@ jobs:
           script: |
             set -e
             BRANCH=${{ github.ref_name }}
+
+            # SonarQube Community does NOT support sonar.branch.name.
+            # Option A: Use separate Sonar projects per branch.
+            PROJECT_KEY="${PROJECT_TYPE}-project-${BRANCH}"
             QG_BRANCH="test"
+            QG_PROJECT_KEY="${PROJECT_TYPE}-project-${QG_BRANCH}"
 
             echo "Project: $PROJECT_TYPE"
             echo "Current Branch: $BRANCH"
+            echo "Scan ProjectKey ($BRANCH): $PROJECT_KEY"
+            echo "Quality Gate Project Checked: $QG_PROJECT_KEY"
 
             # 1. INITIALIZATION
             cd /var/www/html/$BRANCH/$PROJECT_TYPE-project
             git pull origin $BRANCH
 
-            # 2. SONARQUBE ANALYSIS
+            # 2. SONARQUBE ANALYSIS (per-branch project key)
             export SONAR_NODE_ARGS='--max-old-space-size=512'
             /home/ubuntu/sonar-scanner/bin/sonar-scanner \
-              -Dsonar.projectKey=${PROJECT_TYPE}-project \
+              -Dsonar.projectKey=$PROJECT_KEY \
               -Dsonar.sources=app \
               -Dsonar.inclusions=**/*.php \
-              -Dsonar.branch.name=$BRANCH \
               -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} \
               -Dsonar.login=${{ secrets.SONAR_TOKEN }}
 
-            # 3. QUALITY GATE CHECK (always check TEST branch)
-            echo "Quality Gate Branch Checked: $QG_BRANCH"
-
+            # 3. QUALITY GATE CHECK (always check TEST project's gate)
+            STATUS="PENDING"
             for i in {1..24}; do
-              STATUS=$(curl -s -u ${{ secrets.SONAR_TOKEN }}: "${{ secrets.SONAR_HOST_URL }}/api/qualitygates/project_status?projectKey=${PROJECT_TYPE}-project&branch=$QG_BRANCH" | jq -r '.projectStatus.status')
+              STATUS=$(curl -s -u ${{ secrets.SONAR_TOKEN }}: "${{ secrets.SONAR_HOST_URL }}/api/qualitygates/project_status?projectKey=$QG_PROJECT_KEY" | jq -r '.projectStatus.status')
               if [ "$STATUS" = "OK" ] || [ "$STATUS" = "ERROR" ]; then break; fi
               sleep 2
             done
 
-            echo "Scan Result ($QG_BRANCH): $STATUS"
+            echo "Quality Gate Result ($QG_BRANCH project): $STATUS"
 
             if [ "$STATUS" != "OK" ]; then
-              echo "::error title=Quality Gate Failed::Deployment FAILED because '$QG_BRANCH' branch Quality Gate NOT PASSED (STATUS=$STATUS). Current branch was '$BRANCH'."
+              echo "::error title=Quality Gate Failed::Deployment FAILED because '$QG_BRANCH' project Quality Gate NOT PASSED (STATUS=$STATUS). Current branch was '$BRANCH'."
               exit 1
             fi
 
@@ -70,6 +75,7 @@ jobs:
                   sudo php artisan optimize
                   ;;
             esac
+
 
       # - name: Notify
       #   if: always()
