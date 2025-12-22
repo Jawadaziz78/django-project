@@ -20,13 +20,14 @@ jobs:
           script: |
             set -e
             BRANCH=${{ github.ref_name }}
-          
+
             TEST_BRANCH="test"
             TEST_PROJECT_KEY="${PROJECT_TYPE}-project-${TEST_BRANCH}"
-            # 1. INITIALIZATION (always use TEST)
+
+            # 1. INITIALIZATION (always use TEST for sonar gate)
             cd /var/www/html/$TEST_BRANCH/$PROJECT_TYPE-project
             git pull origin $TEST_BRANCH
-            
+
             # 2. SONARQUBE ANALYSIS (always run on TEST)
             export SONAR_NODE_ARGS='--max-old-space-size=512'
             /home/ubuntu/sonar-scanner/bin/sonar-scanner \
@@ -35,50 +36,39 @@ jobs:
               -Dsonar.inclusions=**/*.php \
               -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} \
               -Dsonar.login=${{ secrets.SONAR_TOKEN }}
+
             # 3. QUALITY GATE CHECK (always check TEST)
             STATUS="PENDING"
-
-            
             for i in {1..24}; do
               STATUS=$(curl -s -u ${{ secrets.SONAR_TOKEN }}: "${{ secrets.SONAR_HOST_URL }}/api/qualitygates/project_status?projectKey=$TEST_PROJECT_KEY" | jq -r '.projectStatus.status')
               if [ "$STATUS" = "OK" ] || [ "$STATUS" = "ERROR" ]; then break; fi
               sleep 2
             done
+
+            echo "Project: $PROJECT_TYPE"
+            echo "Current Branch: $BRANCH"
             echo "Scan Result (Test): $STATUS"
 
-            
             if [ "$STATUS" != "OK" ]; then
-              echo "Note: Deployment FAILED because Test branch Quality Gate NOT PASSED."
+              echo "Note: Deployment FAILED :x: because Test branch Quality Gate NOT PASSED."
               echo "::error title=Quality Gate Failed::Project: $PROJECT_TYPE | Current Branch: $BRANCH | Scan Result (Test): $STATUS | Deployment FAILED because Test branch Quality Gate NOT PASSED."
               exit 1
             fi
 
-            
-            # 4. PROJECT SPECIFIC BUILD
+            # 4. If TEST passed, deploy current branch
+            cd /var/www/html/$BRANCH/$PROJECT_TYPE-project
+            git pull origin $BRANCH
+
             case "$PROJECT_TYPE" in
-                vue)
-                  VITE_BASE_URL="/$PROJECT_TYPE/$BRANCH/"
-                  npm run build
-                  ;;
-                nextjs)
-                  npm run build
-                  pm2 restart $PROJECT_TYPE-$BRANCH
-                  ;;
-                laravel)
-                  sudo php artisan optimize
-                  ;;
+              vue)
+                VITE_BASE_URL="/$PROJECT_TYPE/$BRANCH/"
+                npm run build
+                ;;
+              nextjs)
+                npm run build
+                pm2 restart $PROJECT_TYPE-$BRANCH
+                ;;
+              laravel)
+                sudo php artisan optimize
+                ;;
             esac
-            
-      # - name: Notify
-      #   if: always()
-      #   run: |
-      #     STATUS="${{ job.status == 'success' && 'SUCCESS' || 'FAILED' }}"
-      #     if [[ "${{ job.status }}" == "success" ]]; then
-      #       MSG="Deployment successful! "
-      #     else
-      #       [[ "${{ steps.sonar.outcome }}" == "failure" ]] && ERR="Quality Gate" || ERR="Build/Deploy"
-      #       MSG="Failed at: $ERR step "
-      #     fi
-      #     curl -X POST -H 'Content-type: application/json' \
-      #     --data "{\"text\":\"*[$STATUS]* \n*Project:* ${{ env.PROJECT_TYPE }} \n*Branch:* ${{ github.ref_name }} \n*Status:* $MSG\"}" \
-      #     "${{ secrets.SLACK_WEBHOOK }}"
