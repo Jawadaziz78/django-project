@@ -2,16 +2,15 @@ name: Deployment Pipeline
 on:
   push:
     branches: [ "development", "stage", "test" ]
-
 env:
   PROJECT_TYPE: 'laravel'
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Deployment
         id: sonar
+        if: github.ref_name == 'development' || github.ref_name == 'stage' || github.ref_name == 'test'
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.REMOTE_HOST }}
@@ -21,21 +20,13 @@ jobs:
           script: |
             set -e
             BRANCH=${{ github.ref_name }}
-
           
             TEST_BRANCH="test"
             TEST_PROJECT_KEY="${PROJECT_TYPE}-project-${TEST_BRANCH}"
-
-            echo "Project: $PROJECT_TYPE"
-            echo "Current Branch: $BRANCH"
-            echo "Sonar Analysis Branch Used: $TEST_BRANCH"
-            echo "Quality Gate Branch Used: $TEST_BRANCH"
-            echo "Sonar ProjectKey Used: $TEST_PROJECT_KEY"
-
             # 1. INITIALIZATION (always use TEST)
             cd /var/www/html/$TEST_BRANCH/$PROJECT_TYPE-project
             git pull origin $TEST_BRANCH
-
+            
             # 2. SONARQUBE ANALYSIS (always run on TEST)
             export SONAR_NODE_ARGS='--max-old-space-size=512'
             /home/ubuntu/sonar-scanner/bin/sonar-scanner \
@@ -44,23 +35,25 @@ jobs:
               -Dsonar.inclusions=**/*.php \
               -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} \
               -Dsonar.login=${{ secrets.SONAR_TOKEN }}
-
             # 3. QUALITY GATE CHECK (always check TEST)
             STATUS="PENDING"
+
+            
             for i in {1..24}; do
               STATUS=$(curl -s -u ${{ secrets.SONAR_TOKEN }}: "${{ secrets.SONAR_HOST_URL }}/api/qualitygates/project_status?projectKey=$TEST_PROJECT_KEY" | jq -r '.projectStatus.status')
               if [ "$STATUS" = "OK" ] || [ "$STATUS" = "ERROR" ]; then break; fi
               sleep 2
             done
-
             echo "Scan Result (Test): $STATUS"
 
+            
             if [ "$STATUS" != "OK" ]; then
               echo "Note: Deployment FAILED because Test branch Quality Gate NOT PASSED."
               echo "::error title=Quality Gate Failed::Project: $PROJECT_TYPE | Current Branch: $BRANCH | Scan Result (Test): $STATUS | Deployment FAILED because Test branch Quality Gate NOT PASSED."
               exit 1
             fi
 
+            
             # 4. PROJECT SPECIFIC BUILD
             case "$PROJECT_TYPE" in
                 vue)
@@ -75,7 +68,7 @@ jobs:
                   sudo php artisan optimize
                   ;;
             esac
-
+            
       # - name: Notify
       #   if: always()
       #   run: |
