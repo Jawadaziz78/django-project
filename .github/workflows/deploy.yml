@@ -1,21 +1,26 @@
 name: Deployment Pipeline
+
 on:
   push:
     branches: [ "development", "stage", "test" ]
+
 env:
-  PROJECT_TYPE: 'laravel'
+  PROJECT_TYPE: 'vue'
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Test Branch
+      - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          ref: test
+          # Dynamically check out the branch that triggered the workflow
+          ref: ${{ github.ref_name }}
           fetch-depth: 0
 
       - name: SonarQube Scan
+        # This step runs ONLY on the test branch
+        if: github.ref_name == 'test'
         uses: sonarsource/sonarqube-scan-action@v2
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -27,24 +32,33 @@ jobs:
             -Dsonar.inclusions=**/*.php
 
       - name: SonarQube Quality Gate Check
+        # This step runs ONLY on the test branch
+        if: github.ref_name == 'test'
         id: sonarqube-quality-gate
         uses: sonarsource/sonarqube-quality-gate-action@v1
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-      - name: Gatekeeper Decision
+      - name: Quality Gate Decision
+        # This step runs ONLY on the test branch to enforce your custom logic
+        if: github.ref_name == 'test'
         run: |
           STATUS="${{ steps.sonarqube-quality-gate.outputs.quality-gate-status }}"
           echo "Current Quality Gate Status: $STATUS"
           if [[ "$STATUS" == "PASSED" ]]; then
-            echo "✅ Quality Gate PASSED. Proceeding to deployment..."
+            echo "Quality Gate PASSED. Proceeding to deployment..."
           else
-            echo "⛔ BLOCKING DEPLOYMENT: Quality Gate status is '$STATUS'. Exiting workflow."
+            echo "BLOCKING DEPLOYMENT: Quality Gate status is '$STATUS'. Exiting workflow."
             exit 1
           fi
 
       - name: Build and Deploy
-        if: steps.sonarqube-quality-gate.outputs.quality-gate-status == 'PASSED'
+        # Logic: 
+        # 1. On 'test': Runs only if Quality Gate status is 'PASSED'.
+        # 2. On 'development' or 'stage': Runs directly (skips Sonar logic).
+        if: |
+          (github.ref_name == 'test' && steps.sonarqube-quality-gate.outputs.quality-gate-status == 'PASSED') ||
+          (github.ref_name == 'development' || github.ref_name == 'stage')
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.REMOTE_HOST }}
@@ -56,9 +70,9 @@ jobs:
             BRANCH=${{ github.ref_name }}
             DEPLOY_PATH="/var/www/html/$BRANCH/$PROJECT_TYPE-project"
 
-            echo "🚀 Quality Gate PASSED. Starting Deployment for $BRANCH..."
+            echo "🚀 Starting Deployment for $BRANCH..."
             cd $DEPLOY_PATH
-            echo "Pulling latest code..."
+            echo "Pulling latest code from $BRANCH..."
             git pull origin $BRANCH
 
             echo "Building project..."
@@ -80,25 +94,31 @@ jobs:
       - name: Notify
         if: always()
         run: |
-          # 1. Capture metadata
           GATE_STATUS="${{ steps.sonarqube-quality-gate.outputs.quality-gate-status }}"
           BRANCH="${{ github.ref_name }}"
           PROJECT="${{ env.PROJECT_TYPE }}"
-
-          # 2. Determine the status and detail message
-          if [[ "${{ job.status }}" == "success" ]]; then
-            STATUS_EMOJI="PASSED ✅"
-            DETAIL="Deployment Successful for $BRANCH!"
-          else
-            if [[ "$GATE_STATUS" == "FAILED" || "$GATE_STATUS" == "ERROR" ]]; then
-              STATUS_EMOJI="FAILED ❌"
-              DETAIL="Deployment for $BRANCH is BLOCKED. Quality Gate on test branch failed (Duplication > 50%)."
+          JOB_STATUS="${{ job.status }}"
+          
+          if [[ "$BRANCH" == "test" ]]; then
+            # Logic for TEST branch (Gate + Deploy)
+            if [[ "$GATE_STATUS" == "PASSED" ]]; then
+              if [[ "$JOB_STATUS" == "success" ]]; then
+                RESULT="Gate PASSED + Deployment DONE"
+              else
+                RESULT="Gate PASSED + Deployment FAILED"
+              fi
             else
-              STATUS_EMOJI="FAILED ❌"
-              DETAIL="Deployment for $BRANCH failed during the Build/Deploy step."
+              RESULT="Gate ${GATE_STATUS:-UNKNOWN} + Deployment NOT DONE because Quality Gate did not pass."
+            fi
+          else
+            # Logic for STAGE/DEVELOPMENT branches (Deploy only)
+            if [[ "$JOB_STATUS" == "success" ]]; then
+              RESULT="Deployment DONE for $BRANCH successfully"
+            else
+              RESULT="Deployment FAILED for $BRANCH"
             fi
           fi
 
-          # 3. Send the Slack notification
-          PAYLOAD="{\"text\":\"*Project:* $PROJECT\n*Branch:* $BRANCH\n*Sonar Status:* $STATUS_EMOJI\n*Detail:* $DETAIL\"}"
+          PAYLOAD="{\"text\":\"*Project:* $PROJECT\n*Branch:* $BRANCH\n*Result:* $RESULT\"}"
+          
           curl -X POST -H 'Content-type: application/json' --data "$PAYLOAD" "${{ secrets.SLACK_WEBHOOK }}"
