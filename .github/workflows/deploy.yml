@@ -5,7 +5,7 @@ on:
     branches: [ "development", "stage", "test" ]
 
 env:
-  PROJECT_TYPE: 'vue'
+  PROJECT_TYPE: 'laravel'
 
 jobs:
   deploy:
