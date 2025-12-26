@@ -70,7 +70,7 @@ jobs:
             BRANCH=${{ github.ref_name }}
             DEPLOY_PATH="/var/www/html/$BRANCH/$PROJECT_TYPE-project"
 
-            echo "Starting Deployment for $BRANCH..."
+            echo "🚀 Starting Deployment for $BRANCH..."
             cd $DEPLOY_PATH
             echo "Pulling latest code from $BRANCH..."
             git pull origin $BRANCH
@@ -103,9 +103,9 @@ jobs:
             # Logic for TEST branch (Gate + Deploy)
             if [[ "$GATE_STATUS" == "PASSED" ]]; then
               if [[ "$JOB_STATUS" == "success" ]]; then
-                RESULT="Quality Gate PASSED and Deployment DONE"
+                RESULT="Gate PASSED + Deployment DONE"
               else
-                RESULT="Quality Gate PASSED and Deployment FAILED"
+                RESULT="Gate PASSED + Deployment FAILED"
               fi
             else
               RESULT="Gate ${GATE_STATUS:-UNKNOWN} + Deployment NOT DONE because Quality Gate did not pass."
