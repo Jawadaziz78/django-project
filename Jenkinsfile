@@ -62,19 +62,11 @@ pipeline {
                 script { currentStage = STAGE_NAME }
                 
                 sshagent(['deploy-server-key']) {
-                    // FIX: Using 'cat | ssh' pipeline to strictly avoid "No such file" errors
                     sh """
-                        echo '--- 🔍 DEBUG: Listing Workspace Files ---'
-                        ls -la
-                        
-                        echo '--- 🚀 Starting Deployment Stream ---'
-                        # We pipe the local file content directly into the remote bash session
-                        cat deploy.sh | ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "bash -s -- ${BRANCH_NAME} ${PROJECT_TYPE} ${GIT_CREDS_USR} ${GIT_CREDS_PSW}"
-
-                        # Manual Steps (Executed on Remote Server)
                         ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
                             set -e
                             
+                            # Navigate to the project folder (Pre-created by master_setup.sh)
                             cd /var/www/html/${BRANCH_NAME}/${PROJECT_TYPE}-project
                             
                             echo 'Pulling latest code from ${BRANCH_NAME}...'
@@ -88,7 +80,8 @@ pipeline {
                                     VITE_BASE_URL=\\"/vue/${BRANCH_NAME}/\\" npm run build
                                     pm2 restart ${PROJECT_TYPE}-${BRANCH_NAME} ;;
                                 laravel) 
-                                    sudo php artisan optimize ;;
+                                    # Since master_setup.sh installed dependencies, we just optimize
+                                    sudo php artisan optimize  ;;
                             esac
                             
                             echo '✅ Deployment Successfully Completed.'
