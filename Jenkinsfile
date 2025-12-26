@@ -26,7 +26,7 @@ pipeline {
                             export SONAR_NODE_ARGS='--max-old-space-size=512'      
                             /home/ubuntu/sonar-scanner/bin/sonar-scanner \
                                -Dsonar.projectKey=${PROJECT_TYPE}-project \
-                               -Dsonar.sources=app,config,routes \
+                               -Dsonar.sources=app
                                -Dsonar.inclusions=**/*.php \
                         '''
                     }
