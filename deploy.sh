@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# Arguments passed from Jenkinsfile
+# Arguments passed from Jenkins
 BRANCH=$1
 PROJECT_TYPE=$2
 GIT_USER=$3
@@ -32,8 +32,11 @@ sudo chown -R ubuntu:ubuntu .
 if [ "$PROJECT_TYPE" == "laravel" ]; then
     echo "🐘 Running Laravel Pre-Deployment Steps..."
     
-    # --- 📄 AUTOMATED .ENV HANDLING ---
-    # Injected here because Jenkinsfile won't do it
+    # --- STEP A: Install dependencies FIRST ---
+    # This creates the vendor/ folder required for artisan commands
+    composer install --no-dev --optimize-autoloader
+
+    # --- STEP B: Automated .env Handling ---
     if [ ! -f ".env" ]; then
         echo "Creating .env from template..."
         cp .env.example .env
@@ -41,14 +44,12 @@ if [ "$PROJECT_TYPE" == "laravel" ]; then
         sed -i "s/DB_USERNAME=.*/DB_USERNAME=$DB_USER/" .env
         sed -i "s/DB_PASSWORD=.*/DB_PASSWORD=$DB_PASS/" .env
         sed -i "s|APP_URL=.*|APP_URL=https://demo2.flowsoftware.ky/laravel/$BRANCH/|" .env
+        
+        # Now this will work because 'vendor' exists
         php artisan key:generate
     fi
-
-    # Install dependencies
-    composer install --no-dev --optimize-autoloader
     
-    # Deep Permission Fixes for Laravel
-    # Critical: Nginx must write to storage
+    # Deep Permission Fixes
     sudo chmod -R 775 storage bootstrap/cache
     sudo chgrp -R www-data storage bootstrap/cache
     
@@ -59,8 +60,7 @@ if [ "$PROJECT_TYPE" == "laravel" ]; then
     fi
 
 elif [ "$PROJECT_TYPE" == "vue" ]; then
-    echo "⚡ Running Vue Pre-Deployment Steps..."
-    sudo rm -rf node_modules dist .env
+    # ... (Vue logic remains the same)
     pnpm install --ignore-scripts 
     sudo find node_modules/.pnpm -name 'esbuild' -exec chmod +x {} +
     sudo chmod -R +x node_modules/.bin
@@ -70,4 +70,4 @@ fi
 # 3. Final Permissions for Nginx
 sudo chown -R ubuntu:www-data "$LIVE_DIR"
 
-echo "--- ✅ Prep Complete. Returning to Jenkinsfile for Artisan Optimize ---"
+echo "--- ✅ Prep Complete ---"
