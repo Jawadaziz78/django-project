@@ -7,7 +7,7 @@ pipeline {
     
     environment {
         PROJECT_TYPE  = 'laravel' // Change to 'vue', 'nextjs', or 'laravel' as needed
-        DEPLOY_HOST   = 'localhost'
+        DEPLOY_HOST   = '44.220.124.99'
         DEPLOY_USER   = 'ubuntu'
         GIT_CREDS     = credentials('github-https-creds') 
         
