@@ -1,135 +1,131 @@
+def currentStage = 'Initialization'
+def qgStatus = 'NOT_RUN' 
+
 pipeline {
     agent any
-
-    triggers {
-        githubPush()
-    }
-
+    triggers { githubPush() }
+    
     environment {
-        DEPLOY_HOST = '172.31.77.148'
-        DEPLOY_USER = 'ubuntu'
-        BUILD_DIR   = '/home/ubuntu/build-staging'
-        SLACK_URL   = 'https://hooks.slack.com/services/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'
-
-        // -----------------------------------------------------
-        // CHANGE THIS PER REPO: 'laravel', 'vue', or 'nextjs'
-        // -----------------------------------------------------
-        PROJECT_TYPE = 'laravel'
+        PROJECT_TYPE  = 'laravel' // Change to 'vue', 'nextjs', or 'laravel' as needed
+        DEPLOY_HOST   = 'localhost'
+        DEPLOY_USER   = 'ubuntu'
+        GIT_CREDS     = credentials('github-https-creds') 
+        
+        // --- Slack Webhook (COMMENTED OUT) ---
+        // SLACK_WEBHOOK = credentials('slack-webhook-url')
     }
-
+    
     stages {
-        stage('Deploy') {
+        stage('SonarQube Analysis') {
+            when { branch 'test' }
             steps {
-                sshagent(['deploy-server-key']) {
-                    sh '''
-                        ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
-                            set -e
-                            
-                            # -------------------------------------------------------
-                            # 1. SETUP VARIABLES (Correct Live Paths from your logs)
-                            # -------------------------------------------------------
-                            case \\"${PROJECT_TYPE}\\" in
-                                laravel)
-                                    # Based on your previous logs
-                                    LIVE_DIR='/home/ubuntu/projects/laravel'
-                                    REPO_URL='https://github.com/Jawadaziz78/django-project.git'
-                                    ;;
-                                vue)
-                                    LIVE_DIR='/home/ubuntu/projects/vue/app'
-                                    REPO_URL='https://github.com/Jawadaziz78/vue-project.git'
-                                    ;;
-                                nextjs)
-                                    LIVE_DIR='/home/ubuntu/projects/nextjs/blog'
-                                    REPO_URL='https://github.com/Jawadaziz78/nextjs-project.git'
-                                    ;;
-                                *)
-                                    echo '❌ Error: Unknown Project Type'; exit 1 ;;
-                            esac
-
-                            echo '-----------------------------------'
-                            echo '🚀 DEPLOYING: ${PROJECT_TYPE}'
-                            echo '📂 Staging: ${BUILD_DIR}'
-                            echo '📂 Live: '$LIVE_DIR
-                            echo '-----------------------------------'
-
-                            # -------------------------------------------------------
-                            # 2. PREPARE STAGING (Clean Clone)
-                            # -------------------------------------------------------
-                            # Clean build directory
-                            sudo rm -rf ${BUILD_DIR}
-                            mkdir -p ${BUILD_DIR}
-                            
-                            # Clone fresh code
-                            git clone \\$REPO_URL ${BUILD_DIR}
-                            cd ${BUILD_DIR}
-                            git checkout ${BRANCH_NAME:-main}
-
-                            # -------------------------------------------------------
-                            # 3. RSYNC TO LIVE (The Safe Deployment)
-                            # -------------------------------------------------------
-                            # Ensure live directory exists
-                            mkdir -p \\$LIVE_DIR
-
-                            # Sync files BUT exclude config/vendor (keeps existing deps)
-                            rsync -av --delete --exclude='.env' --exclude='.git' --exclude='storage' --exclude='public/storage' --exclude='node_modules' --exclude='vendor' --exclude='public/dist' ${BUILD_DIR}/ \\$LIVE_DIR/
-
-                            # -------------------------------------------------------
-                            # 4. RUN POST-DEPLOY COMMANDS (Using existing Live Dependencies)
-                            # -------------------------------------------------------
-                            cd \\$LIVE_DIR
-
-                            # Load Node 20 (Required for Vue/Next.js)
-                            export NVM_DIR=\\"\\$HOME/.nvm\\"
-                            [ -s \\"\\$NVM_DIR/nvm.sh\\" ] && . \\"\\$NVM_DIR/nvm.sh\\"
-                            nvm use 20
-
-                            case \\"${PROJECT_TYPE}\\" in
-                                laravel)
-                                    echo '⚙️ Running Laravel Tasks...'
-                                    # Fixes the 'Access Denied' error by clearing bad config cache
-                                    php artisan config:clear
-                                    php artisan cache:clear
-                                    
-                                    php artisan migrate --force
-                                    php artisan config:cache
-                                    php artisan route:cache
-                                    php artisan view:cache
-                                    sudo systemctl reload nginx
-                                    ;;
-                                
-                                vue)
-                                    echo '⚙️ Building Vue (using existing node_modules)...'
-                                    npm run build
-                                    sudo systemctl reload nginx
-                                    ;;
-                                
-                                nextjs)
-                                    echo '⚙️ Building Next.js (using existing node_modules)...'
-                                    cd web
-                                    
-                                    # Clean old build cache to prevent errors
-                                    rm -rf .next
-                                    
-                                    npm run build
-                                    pm2 restart all
-                                    sudo systemctl reload nginx
-                                    ;;
-                            esac
-                            
-                            echo '✅ DEPLOYMENT SUCCESSFUL'
-                        "
-                    '''
+                script {
+                    currentStage = STAGE_NAME 
+                    withSonarQubeEnv('sonar-server') {
+                        sh '''
+                            export SONAR_NODE_ARGS='--max-old-space-size=512'      
+                            /home/ubuntu/sonar-scanner/bin/sonar-scanner \
+                               -Dsonar.projectKey=${PROJECT_TYPE}-project \
+                               -Dsonar.sources=app \
+                               -Dsonar.inclusions=**/*.php \
+                        '''
+                    }
                 }
             }
         }
-    }
 
-    post {
-        success {
-            sh "curl -X POST -H 'Content-type: application/json' --data '{\"text\":\"✅ Deployment SUCCESS: ${env.JOB_NAME} (Build #${env.BUILD_NUMBER})\"}' ${SLACK_URL}"
+        stage('Quality Gate') {
+            when { branch 'test' }
+            steps {
+                script {
+                    currentStage = STAGE_NAME
+                    timeout(time: 3, unit: 'MINUTES') {
+                        def qg = waitForQualityGate(abortPipeline: true)
+                        qgStatus = qg.status
+                        if (qgStatus != 'OK') {
+                            error "BLOCKING DEPLOYMENT: Quality Gate status is '${qgStatus}'."
+                        }
+                    }
+                }
+            }
         }
-        failure {
-            sh "curl -X POST -H 'Content-type: application/json' --data '{\"text\":\"❌ Deployment FAILED: ${env.JOB_NAME} (Build #${env.BUILD_NUMBER})\"}' ${SLACK_URL}"
+
+        stage('Build and Deploy') {
+            when {
+                anyOf {
+                    branch 'test'
+                    branch 'development'
+                    branch 'stage'
+                }
+            }
+            steps {
+                script { currentStage = STAGE_NAME }
+                
+                sshagent(['deploy-server-key']) {
+                    // FIX: Using 'cat | ssh' pipeline to strictly avoid "No such file" errors
+                    sh """
+                        echo '--- 🔍 DEBUG: Listing Workspace Files ---'
+                        ls -la
+                        
+                        echo '--- 🚀 Starting Deployment Stream ---'
+                        # We pipe the local file content directly into the remote bash session
+                        cat deploy.sh | ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "bash -s -- ${BRANCH_NAME} ${PROJECT_TYPE} ${GIT_CREDS_USR} ${GIT_CREDS_PSW}"
+
+                        # Manual Steps (Executed on Remote Server)
+                        ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
+                            set -e
+                            
+                            cd /var/www/html/${BRANCH_NAME}/${PROJECT_TYPE}-project
+                            
+                            echo 'Pulling latest code from ${BRANCH_NAME}...'
+                            git pull origin ${BRANCH_NAME}
+                            
+                            echo 'Building project...'
+                            case \\"${PROJECT_TYPE}\\" in
+                                vue) 
+                                    VITE_BASE_URL=\\"/vue/${BRANCH_NAME}/\\" npm run build ;;
+                                nextjs) 
+                                    VITE_BASE_URL=\\"/vue/${BRANCH_NAME}/\\" npm run build
+                                    pm2 restart ${PROJECT_TYPE}-${BRANCH_NAME} ;;
+                                laravel) 
+                                    sudo php artisan optimize ;;
+                            esac
+                            
+                            echo '✅ Deployment Successfully Completed.'
+                        "
+                    """
+                }
+            }
+        } 
+    } 
+    
+    post {
+        always {
+            script {
+                def resultMsg = ""
+                def jobResult = currentBuild.currentResult 
+
+                if (env.BRANCH_NAME == 'test') {
+                    if (qgStatus == 'OK') {
+                        resultMsg = (jobResult == 'SUCCESS') ? "Quality Gate PASSED and Deployment DONE" : "Quality Gate PASSED and Deployment FAILED at stage: ${currentStage}"
+                    } else {
+                        resultMsg = "Gate ${qgStatus} + Deployment NOT DONE because Quality Gate did not pass."
+                    }
+                } else {
+                    resultMsg = (jobResult == 'SUCCESS') ? "Deployment DONE for ${env.BRANCH_NAME} successfully" : "Deployment FAILED for ${env.BRANCH_NAME} at stage: ${currentStage}"
+                }
+
+                echo "Deployment Result: ${resultMsg}"
+
+                // --- Slack Notification (COMMENTED OUT) ---
+                /*
+                sh """
+                    curl -X POST -H 'Content-type: application/json' \
+                    --data '{"text":"*Project:* ${PROJECT_TYPE}\\n*Branch:* ${env.BRANCH_NAME}\\n*Result:* ${resultMsg}\\n<${env.BUILD_URL}|View Logs>"}' \
+                    ${SLACK_WEBHOOK}
+                """
+                */
+            }
         }
     }
 }
