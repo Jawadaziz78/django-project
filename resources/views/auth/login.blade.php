@@ -7,7 +7,7 @@
         <div class="my-l">&nbsp;</div>
 
         <div class="card content-wrap auto-height">
-            <h1 class="list-heading">Log In Jawad Aziz</h1>
+            <h1 class="list-heading">Log In Jawad Aziz J</h1>
 
             @include('auth.parts.login-message')
 
